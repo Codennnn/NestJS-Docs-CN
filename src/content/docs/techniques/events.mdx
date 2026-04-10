@@ -1,0 +1,184 @@
+# 事件机制
+
+[`@nestjs/event-emitter`](https://www.npmjs.com/package/@nestjs/event-emitter) 是 NestJS 的一个事件机制模块，基于简洁的观察者模式设计，方便你在应用中订阅和监听事件。该机制天然支持解耦，同一事件可以被多个独立的监听器响应，从而提升系统的灵活性。
+
+该模块底层依赖功能强大的 [eventemitter2](https://github.com/EventEmitter2/EventEmitter2) 库构建。
+
+## 快速开始
+
+首先，安装所需依赖：
+
+```bash
+npm install @nestjs/event-emitter
+```
+
+接着，在应用的根模块中引入并初始化 `EventEmitterModule`：
+
+```ts filename='app.module.ts'
+import { Module } from '@nestjs/common'
+import { EventEmitterModule } from '@nestjs/event-emitter'
+
+@Module({
+  imports: [EventEmitterModule.forRoot()],
+})
+export class AppModule {}
+```
+
+调用 `forRoot()` 方法会自动创建事件发射器实例，并在 `onApplicationBootstrap` 生命周期钩子中注册所有声明的事件监听器，确保监听器在所有模块加载完成后统一注册，避免初始化时序问题。
+
+### 自定义配置
+
+你还可以通过传入配置对象，自定义底层 `EventEmitter` 实例的行为。例如：
+
+```ts
+EventEmitterModule.forRoot({
+  // 是否启用通配符支持（如 user.*）
+  wildcard: false,
+  // 事件命名空间的分隔符
+  delimiter: '.',
+  // 启用后可监听 newListener 事件
+  newListener: false,
+  // 启用后可监听 removeListener 事件
+  removeListener: false,
+  // 每个事件允许注册的最大监听器数量
+  maxListeners: 10,
+  // 超出监听器限制时，在内存泄漏警告中显示事件名称
+  verboseMemoryLeak: false,
+  // 当 error 事件没有监听器时，是否抑制抛出异常
+  ignoreErrors: false,
+})
+```
+
+这些配置参数直接传递给 eventemitter2，用于微调其事件发射与监听行为。
+
+## 事件派发
+
+要在应用中派发（触发）事件，需要通过依赖注入的方式，将 `EventEmitter2` 注入到类的构造函数中：
+
+```ts
+import { EventEmitter2 } from '@nestjs/event-emitter'
+
+constructor(private eventEmitter: EventEmitter2) {}
+```
+
+然后，你就可以在类的方法中调用 `.emit()` 方法来派发事件。例如：
+
+```ts
+this.eventEmitter.emit(
+  'order.created',
+  new OrderCreatedEvent({
+    orderId: 1,
+    payload: {},
+  })
+)
+```
+
+在这个例子中，我们向事件通道 `order.created` 派发了一个 `OrderCreatedEvent` 实例。所有订阅该事件的监听器都会收到这条事件通知，并以此为基础执行相应的逻辑。
+
+## 事件监听
+
+声明事件监听器时，只需在方法前添加 `@OnEvent()` 装饰器。例如：
+
+```ts
+@OnEvent('order.created')
+handleOrderCreatedEvent(payload: OrderCreatedEvent) {
+  // 处理并响应 "OrderCreatedEvent" 事件
+}
+```
+
+<CalloutInfo type="warning">
+  事件订阅器（event subscriber）**不能**设置为请求作用域（request-scoped）。
+</CalloutInfo>
+
+`@OnEvent()` 的第一个参数用于指定监听的事件，可以是 `string` 或 `symbol`，启用通配符后也支持 `string | symbol | Array<string | symbol>`。
+
+第二个参数为可选的监听器选项对象，类型如下：
+
+```ts
+export type OnEventOptions = OnOptions & {
+  /**
+   * 是否将监听器插入队列前面（默认为插入末尾）。
+   *
+   * @default false
+   */
+  prependListener?: boolean
+
+  /**
+   * 是否抑制事件处理过程中的异常抛出。
+   *
+   * @default true
+   */
+  suppressErrors?: boolean
+}
+```
+
+<CalloutInfo>
+  关于 `OnOptions` 类型的详细说明，请参考 [`eventemitter2`
+  官方文档](https://github.com/EventEmitter2/EventEmitter2#emitteronevent-listener-options-objectboolean)。
+</CalloutInfo>
+
+例如，下面的监听器会异步处理事件：
+
+```ts
+@OnEvent('order.created', { async: true })
+handleOrderCreatedEvent(payload: OrderCreatedEvent) {
+  // 异步处理 "OrderCreatedEvent" 事件
+}
+```
+
+### 命名空间与通配符支持
+
+如需使用命名空间或通配符监听功能，请在调用 `EventEmitterModule.forRoot()` 时启用 `wildcard` 选项。
+
+启用后，事件名称可通过分隔符（默认为 `.`）表示层级结构，如 `order.created`，也可用数组形式如 `['order', 'created']`，分隔符可通过 `delimiter` 配置项自定义。
+
+通配符订阅事件示例：
+
+```ts
+@OnEvent('order.*')
+handleOrderEvents(payload: OrderCreatedEvent | OrderRemovedEvent | OrderUpdatedEvent) {
+  // 处理所有 "order" 命名空间下的事件
+}
+```
+
+注意，单个 `*` 仅匹配一级事件名称：
+
+- ✅ `order.*` 可匹配 `order.created`、`order.shipped`
+- ❌ 不匹配 `order.delayed.out_of_stock`
+
+如需监听多级事件，请使用多级通配符 `**`，语义与 `glob` 模式一致：
+
+```ts
+@OnEvent('**')
+handleEverything(payload: any) {
+  // 捕获所有事件
+}
+```
+
+<CalloutInfo>
+  `EventEmitter2` 还提供如 `waitFor()`、`onAny()` 等实用方法，详见 [官方文档](https://github.com/EventEmitter2/EventEmitter2)。
+</CalloutInfo>
+
+## 避免事件丢失
+
+如果你在 `onApplicationBootstrap` 生命周期钩子之前或期间触发事件（如在模块构造函数或 `onModuleInit` 方法中），可能会出现事件被遗漏的情况，因为此时 `EventSubscribersLoader` 可能尚未完成所有监听器的注册。
+
+为避免此问题，建议在模块的 `onApplicationBootstrap` 钩子中，使用 `EventEmitterReadinessWatcher` 提供的 `waitUntilReady()` 方法。该方法返回一个 `Promise`，会在**所有监听器注册完成后**才 resolve，确保后续事件都能被正确监听。
+
+```ts
+await this.eventEmitterReadinessWatcher.waitUntilReady()
+
+// 等待监听器就绪后再触发事件
+this.eventEmitter.emit(
+  'order.created',
+  new OrderCreatedEvent({ orderId: 1, payload: {} })
+)
+```
+
+<CalloutInfo>
+  仅当你**必须在 `onApplicationBootstrap` 钩子完成前**触发事件时，才需要使用 `waitUntilReady()` 进行处理。
+</CalloutInfo>
+
+## 示例
+
+完整示例代码见：[GitHub 示例仓库](https://github.com/nestjs/nest/tree/master/sample/30-event-emitter)。

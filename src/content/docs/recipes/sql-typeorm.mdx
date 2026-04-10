@@ -1,0 +1,166 @@
+# TypeORM
+
+<CalloutInfo>
+  <div>本章内容仅适用于 TypeScript 用户。</div>
+</CalloutInfo>
+
+<CalloutInfo type="warning">
+  本篇将引导你使用 **TypeORM** 包，通过自定义提供者从零开始创建一个
+  `DatabaseModule`（数据库模块）。此方法涉及较多步骤，旨在演示底层原理。在实际项目中，建议直接使用官方提供的
+  `@nestjs/typeorm`
+  包来简化流程。要了解更多信息，请参阅[这篇文档](/techniques/sql)。
+</CalloutInfo>
+
+[TypeORM](https://github.com/typeorm/typeorm) 是目前 Node.js 生态中最成熟的对象关系映射（Object Relational Mapper，简称 ORM）工具。由于其采用 TypeScript 编写，因此与 Nest 框架配合良好。
+
+## 快速开始
+
+要使用 TypeORM，首先需要安装相关依赖：
+
+```bash
+npm install typeorm mysql2
+```
+
+第一步，我们需要实例化 `typeorm` 包中的 `DataSource` 类并调用其 `initialize()` 方法来建立数据库连接。由于 `initialize()` 方法会返回一个 `Promise`，因此我们需要创建一个[异步提供者](/fundamentals/async-components)。
+
+```ts filename='database.providers.ts'
+import { DataSource } from 'typeorm'
+
+export const databaseProviders = [
+  {
+    provide: 'DATA_SOURCE',
+    useFactory: async () => {
+      const dataSource = new DataSource({
+        type: 'mysql',
+        host: 'localhost',
+        port: 3306,
+        username: 'root',
+        password: 'root',
+        database: 'test',
+        entities: [__dirname + '/../**/*.entity{.ts,.js}'],
+        synchronize: true,
+      })
+
+      return dataSource.initialize()
+    },
+  },
+]
+```
+
+<CalloutInfo type="warning">
+  在生产环境中，不应将 `synchronize` 选项设置为 `true`，否则可能丢失生产数据。
+</CalloutInfo>
+
+<CalloutInfo>
+  按照最佳实践，我们将自定义提供者声明在单独的文件中，并以 `*.providers.ts`
+  作为文件后缀。
+</CalloutInfo>
+
+接下来，我们需要导出这些提供者，以便在应用的其他部分复用。
+
+```ts filename='database.module.ts'
+import { Module } from '@nestjs/common'
+import { databaseProviders } from './database.providers'
+
+@Module({
+  providers: [...databaseProviders],
+  exports: [...databaseProviders],
+})
+export class DatabaseModule {}
+```
+
+现在，我们就可以通过 `@Inject()` 装饰器注入 `DATA_SOURCE` 了。任何依赖该提供者的类，都会等待数据库连接（即 `Promise` 解析）成功后，才被 Nest 框架实例化。
+
+## 仓储模式
+
+[TypeORM](https://github.com/typeorm/typeorm) 支持仓储设计模式。在该模式下，每个实体 (Entity) 都对应一个仓储 (Repository)，这些仓储可从数据库连接实例中获取。
+
+但首先，我们需要至少有一个实体。这里以 `Photo` 实体为例。
+
+```ts filename='photo.entity.ts'
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm'
+
+@Entity()
+export class Photo {
+  @PrimaryGeneratedColumn()
+  id: number
+
+  @Column({ length: 500 })
+  name: string
+
+  @Column('text')
+  description: string
+
+  @Column()
+  filename: string
+
+  @Column('int')
+  views: number
+
+  @Column()
+  isPublished: boolean
+}
+```
+
+我们将 `Photo` 实体放置在 `photo` 目录下，该目录也用于存放与 `PhotoModule` 相关的所有文件。接下来，我们创建一个**仓储提供者 （Repository Provider）**：
+
+```ts filename='photo.providers.ts'
+import { DataSource } from 'typeorm'
+import { Photo } from './photo.entity'
+
+export const photoProviders = [
+  {
+    provide: 'PHOTO_REPOSITORY',
+    useFactory: (dataSource: DataSource) => dataSource.getRepository(Photo),
+    inject: ['DATA_SOURCE'],
+  },
+]
+```
+
+<CalloutInfo type="warning">
+  在实际项目中，建议将 `'PHOTO_REPOSITORY'` 和 `'DATA_SOURCE'` 等注入令牌
+  (Token) 统一定义在 `constants.ts` 文件中，以避免使用**魔法字符串**。
+</CalloutInfo>
+
+现在，我们可以通过 `@Inject()` 装饰器将 `Repository<Photo>` 注入到 `PhotoService` 中：
+
+```ts filename='photo.service.ts'
+import { Injectable, Inject } from '@nestjs/common'
+import { Repository } from 'typeorm'
+import { Photo } from './photo.entity'
+
+@Injectable()
+export class PhotoService {
+  constructor(
+    @Inject('PHOTO_REPOSITORY')
+    private photoRepository: Repository<Photo>
+  ) {}
+
+  async findAll(): Promise<Photo[]> {
+    return this.photoRepository.find()
+  }
+}
+```
+
+数据库连接是**异步**的，但 Nest 会让这个过程对开发者透明。`PhotoRepository` 会等待数据库连接就绪，`PhotoService` 也会相应地延迟实例化，直到仓储可用。Nest 会在应用启动前解析好所有依赖项，确保一切准备就绪。
+
+下面是完整的 `PhotoModule`：
+
+```ts filename='photo.module.ts'
+import { Module } from '@nestjs/common'
+import { DatabaseModule } from '../database/database.module'
+import { photoProviders } from './photo.providers'
+import { PhotoService } from './photo.service'
+
+@Module({
+  imports: [DatabaseModule],
+  providers: [...photoProviders, PhotoService],
+})
+export class PhotoModule {}
+```
+
+<CalloutInfo>
+  <div>
+    为使 `PhotoModule` 生效，请确保已将其导入到根模块 (例如 `AppModule`) 中。
+  </div>
+</CalloutInfo>

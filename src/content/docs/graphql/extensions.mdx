@@ -1,0 +1,60 @@
+# 扩展（Extensions）
+
+<CalloutInfo type="warning">
+
+本章节仅适用于「代码优先」方式。
+
+</CalloutInfo>
+
+扩展是一项**高级且底层的功能**，允许你在类型配置中定义任意数据。通过为特定字段附加自定义元数据，可以实现更复杂、通用的解决方案。例如，借助扩展，你可以为字段定义访问该字段所需的角色。这些角色可以在运行时（runtime）被反射，用于判断调用者是否有足够权限获取某个字段。
+
+## 添加自定义元数据
+
+要为字段附加自定义元数据，请使用 `@nestjs/graphql` 包中导出的 `@Extensions()` 装饰器。
+
+```ts
+@Field()
+@Extensions({ role: Role.ADMIN })
+password: string
+```
+
+在上面的示例中，我们为 `role` 元数据属性赋值为 `Role.ADMIN`。`Role` 是一个简单的 TypeScript 枚举，用于归类系统中所有可用的用户角色。
+
+注意，除了可以在字段上设置元数据外，你还可以在类级别和方法级别（例如查询处理器）使用 `@Extensions()` 装饰器。
+
+## 使用自定义元数据
+
+利用自定义元数据的逻辑可以根据需求变得非常复杂。例如，你可以创建一个简单的拦截器，在每次方法调用时存储或记录事件，或者实现一个[字段中间件](/graphql/field-middleware)，将获取字段所需的角色与调用者权限进行匹配（实现字段级权限系统）。
+
+为了便于说明，我们定义一个 `checkRoleMiddleware`，它会将用户的角色（此处为硬编码）与访问目标字段所需的角色进行比较：
+
+```ts
+export const checkRoleMiddleware: FieldMiddleware = async (
+  ctx: MiddlewareContext,
+  next: NextFn
+) => {
+  const { info } = ctx
+  const { extensions } = info.parentType.getFields()[info.fieldName]
+
+  /**
+   * 在实际应用中，"userRole" 变量应代表调用者（用户）的角色
+   * （例如 "ctx.user.role"）。
+   */
+  const userRole = Role.USER
+  if (userRole === extensions.role) {
+    // 或直接 "return null" 忽略
+    throw new ForbiddenException(
+      `用户没有足够的权限访问 "${info.fieldName}" 字段。`
+    )
+  }
+  return next()
+}
+```
+
+有了上述中间件后，我们可以如下方式为 `password` 字段注册中间件：
+
+```ts
+@Field({ middleware: [checkRoleMiddleware] })
+@Extensions({ role: Role.ADMIN })
+password: string
+```

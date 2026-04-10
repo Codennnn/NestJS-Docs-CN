@@ -1,0 +1,99 @@
+# 变更（Mutation）
+
+大多数关于 GraphQL 的讨论都集中在数据获取上，但任何完整的数据平台都需要一种修改服务端数据的方式。在 REST 中，任何请求都可能会对服务器产生副作用，但最佳实践建议我们不应在 GET 请求中修改数据。GraphQL 也类似 —— 从技术上讲，任何查询都可以实现为数据写入操作。然而，和 REST 一样，推荐遵循约定：所有会导致数据写入的操作应通过 mutation（变更）显式发送（详细内容可参见[这里](https://graphql.org/learn/queries/#mutations)）。
+
+官方 [Apollo](https://www.apollographql.com/docs/graphql-tools/generate-schema.html) 文档中使用了一个 `upvotePost()` 变更的示例。这个变更实现了一个方法，用于增加某个帖子（post）的 `votes` 属性值。要在 Nest 中实现类似的变更，我们将使用 `@Mutation()` 装饰器。
+
+## 代码优先（Code first）
+
+让我们为上一节中用到的 `AuthorResolver` 再添加一个方法（参见[解析器](/graphql/resolvers)）。
+
+```ts
+@Mutation(() => Post)
+async upvotePost(@Args({ name: 'postId', type: () => Int }) postId: number) {
+  return this.postsService.upvoteById({ id: postId })
+}
+```
+
+<CalloutInfo>
+  所有装饰器（如 `@Resolver`、`@ResolveField`、`@Args` 等）都从
+  `@nestjs/graphql` 包中导出。
+</CalloutInfo>
+
+这样会在 GraphQL 的 SDL 中生成如下部分：
+
+```graphql
+type Mutation {
+  upvotePost(postId: Int!): Post
+}
+```
+
+`upvotePost()` 方法接收 `postId`（Int 类型）作为参数，并返回更新后的 `Post` 实体。出于在[解析器](/graphql/resolvers)一节中解释的原因，我们需要显式设置返回类型。
+
+如果变更需要接收一个对象作为参数，我们可以创建一个**输入类型（input type）**。输入类型是一种特殊的对象类型，可以作为参数传递（详细内容可参见[这里](https://graphql.org/learn/schema/#input-types)）。要声明输入类型，请使用 `@InputType()` 装饰器。
+
+```ts
+import { InputType, Field } from '@nestjs/graphql'
+
+@InputType()
+export class UpvotePostInput {
+  @Field()
+  postId: number
+}
+```
+
+<CalloutInfo>
+  `@InputType()`
+  装饰器可以接收一个选项对象作为参数，例如可以指定输入类型的描述。需要注意的是，由于
+  TypeScript 的元数据反射机制限制，必须使用 `@Field`
+  装饰器手动指明类型，或者使用 [CLI 插件](/graphql/cli-plugin)。
+</CalloutInfo>
+
+然后我们可以在解析器类中使用这个类型：
+
+```ts
+@Mutation(() => Post)
+async upvotePost(
+  @Args('upvotePostData') upvotePostData: UpvotePostInput,
+) {}
+```
+
+## 模式优先（Schema first）
+
+让我们扩展上一节中使用的 `AuthorResolver`（参见[解析器](/graphql/resolvers)）。
+
+```ts
+@Mutation()
+async upvotePost(@Args('postId') postId: number) {
+  return this.postsService.upvoteById({ id: postId })
+}
+```
+
+请注意，上述代码假设业务逻辑已经被移动到 `PostsService`（负责查询帖子并递增其 `votes` 属性）。`PostsService` 类中的逻辑可以根据实际需求简单或复杂。这个示例的重点在于展示解析器（Resolver）如何与其他提供者进行交互。
+
+最后一步是将我们的 mutation 添加到已有的类型定义中。
+
+```graphql
+type Author {
+  id: Int!
+  firstName: String
+  lastName: String
+  posts: [Post]
+}
+
+type Post {
+  id: Int!
+  title: String
+  votes: Int
+}
+
+type Query {
+  author(id: Int!): Author
+}
+
+type Mutation {
+  upvotePost(postId: Int!): Post
+}
+```
+
+现在，`upvotePost(postId: Int!): Post` mutation 已经可以作为应用的 GraphQL API 的一部分被调用。

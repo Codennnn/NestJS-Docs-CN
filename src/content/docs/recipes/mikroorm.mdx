@@ -1,0 +1,264 @@
+# MikroORM
+
+本篇教程将指导你在 Nest 中快速上手 MikroORM。MikroORM 是一款适用于 Node.js 的 TypeScript ORM（对象关系映射），它基于数据映射器（Data Mapper）、工作单元（Unit of Work）和标识映射（Identity Map）模式构建。作为 TypeORM 的优秀替代品，从 TypeORM 迁移过来也相对容易。关于 MikroORM 的完整文档，请参阅其[官方网站](https://mikro-orm.io/docs)。
+
+<CalloutInfo>
+  `@mikro-orm/nestjs` 是一个第三方包，不由 NestJS
+  核心团队维护。如遇相关问题，请前往其 [GitHub
+  仓库](https://github.com/mikro-orm/nestjs)报告。
+</CalloutInfo>
+
+## 安装
+
+在 Nest 中集成 MikroORM 最简单的方法是使用 [`@mikro-orm/nestjs` 模块](https://github.com/mikro-orm/nestjs)。
+
+首先，安装此模块、MikroORM 核心库以及你选择的数据库驱动：
+
+```bash
+npm install @mikro-orm/core @mikro-orm/nestjs @mikro-orm/sqlite
+```
+
+MikroORM 支持多种数据库驱动，例如 `postgres`、`sqlite` 和 `mongo`。有关驱动的详细信息，请参阅[官方文档](https://mikro-orm.io/docs/usage-with-sql/)。
+
+安装完成后，你可以在根模块 `AppModule` 中导入 `MikroOrmModule`。
+
+```ts
+import { SqliteDriver } from '@mikro-orm/sqlite'
+
+@Module({
+  imports: [
+    MikroOrmModule.forRoot({
+      entities: ['./dist/entities'],
+      entitiesTs: ['./src/entities'],
+      dbName: 'my-db-name.sqlite3',
+      driver: SqliteDriver,
+    }),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+```
+
+`forRoot()` 方法接受的配置对象与 MikroORM 的 `init()` 方法完全相同。有关所有可用选项的详细说明，请参阅[这篇文档](https://mikro-orm.io/docs/configuration)。
+
+此外，你也可以通过 `mikro-orm.config.ts` 文件来[配置 CLI](https://mikro-orm.io/docs/installation#setting-up-the-commandline-tool)。这样，在调用 `MikroOrmModule.forRoot()` 时就无需传入配置对象。
+
+```ts
+@Module({
+  imports: [
+    MikroOrmModule.forRoot(),
+  ],
+  ...
+})
+export class AppModule {}
+```
+
+然而，如果你的构建流程包含 tree shaking，这种方法可能会失效。此时，建议你将配置显式导入：
+
+```ts
+import config from './mikro-orm.config' // 你的 ORM 配置
+
+@Module({
+  imports: [
+    MikroOrmModule.forRoot(config),
+  ],
+  ...
+})
+export class AppModule {}
+```
+
+配置完成后，`EntityManager`（实体管理器）就可以在项目中随处注入，而无需在其他模块中再次导入 `MikroOrmModule`。
+
+```ts
+// 可以从你的驱动包或 `@mikro-orm/knex` 导入所有内容
+import { EntityManager, MikroORM } from '@mikro-orm/sqlite'
+
+@Injectable()
+export class MyService {
+  constructor(
+    private readonly orm: MikroORM,
+    private readonly em: EntityManager
+  ) {}
+}
+```
+
+<CalloutInfo>
+  请注意，`EntityManager` 应从你所用的驱动包（例如
+  `@mikro-orm/sqlite`）中导入。如果你已安装
+  `@mikro-orm/knex`，也可以直接从该包导入。
+</CalloutInfo>
+
+## 仓储模式
+
+MikroORM 支持仓储模式（Repository Pattern）。你可以为每个实体（Entity）创建一个仓库。关于此模式的完整文档，请参阅[官方文档](https://mikro-orm.io/docs/repositories)。
+
+要为特定作用域注册仓库，请使用 `MikroOrmModule.forFeature()` 方法。
+
+<CalloutInfo>
+  你不应该通过 `forFeature()` 注册基础实体（Base
+  Entity），因为它们没有独立的仓库。同时，基础实体应被包含在 `forRoot()` 方法的
+  `entities` 列表（或全局 ORM 配置）中。
+</CalloutInfo>
+
+```ts
+// photo.module.ts
+@Module({
+  imports: [MikroOrmModule.forFeature([Photo])],
+  providers: [PhotoService],
+  controllers: [PhotoController],
+})
+export class PhotoModule {}
+```
+
+然后，将 `PhotoModule` 导入到根模块 (`AppModule`) 中：
+
+```ts filename='app.module.ts'
+@Module({
+  imports: [MikroOrmModule.forRoot(...), PhotoModule],
+})
+export class AppModule {}
+```
+
+完成此设置后，就可以在 `PhotoService` 中通过 `@InjectRepository()` 装饰器注入 `Photo` 实体的仓库：
+
+```ts filename='photo.service.ts'
+@Injectable()
+export class PhotoService {
+  constructor(
+    @InjectRepository(Photo)
+    private readonly photoRepository: EntityRepository<Photo>
+  ) {}
+}
+```
+
+## 使用自定义仓库
+
+如果使用自定义仓库，则无需 `@InjectRepository()` 装饰器，因为 Nest 的依赖注入系统会根据类型引用自动解析依赖。
+
+```ts
+// `**./author.entity.ts**`
+@Entity({ repository: () => AuthorRepository })
+export class Author {
+  // 允许在 `em.getRepository()` 中进行类型推断
+  [EntityRepositoryType]?: AuthorRepository
+}
+
+// `**./author.repository.ts**`
+export class AuthorRepository extends EntityRepository<Author> {
+  // 你可以在这里添加自定义方法...
+}
+```
+
+自定义仓库类本身就可以作为注入令牌（injection token），因此不再需要 `@InjectRepository()` 装饰器：
+
+```ts
+@Injectable()
+export class MyService {
+  constructor(private readonly repo: AuthorRepository) {}
+}
+```
+
+## 自动加载实体
+
+如果手动将每个实体都添加到连接配置的 `entities` 数组中，会非常繁琐。此外，在根模块中引用所有实体，会破坏应用程序的领域边界，并可能导致实现细节泄漏到其他部分。为了解决这个问题，你可以使用静态 glob 路径。
+
+但请注意，webpack 不支持 glob 路径。因此，如果你在 monorepo 中构建应用，就无法使用这种方式。针对这种情况，NestJS 提供了一种自动加载实体的替代方案：只需在传递给 `forRoot()` 方法的配置对象中，将 `autoLoadEntities` 属性设置为 `true` 即可。
+
+```ts
+@Module({
+  imports: [
+    MikroOrmModule.forRoot({
+      ...
+      autoLoadEntities: true,
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+启用此选项后，所有通过 `forFeature()` 方法注册的实体，都会被自动添加到配置对象的 `entities` 数组中。
+
+<CalloutInfo>
+  值得注意的是，那些未通过 `forFeature()`
+  注册、仅通过实体间关系引用的实体，不会因为启用了 `autoLoadEntities`
+  而被自动包含进来。
+</CalloutInfo>
+
+<CalloutInfo>
+  `autoLoadEntities` 选项对 MikroORM CLI 没有影响。在这种情况下，你仍需在 CLI
+  配置文件中明确列出所有实体。不过，由于 CLI 不经过 webpack 处理，因此它可以使用
+  glob 路径。
+</CalloutInfo>
+
+## 序列化
+
+<CalloutInfo type="warning">
+  为了提升类型安全，MikroORM 会将每个实体关系都包装在 `Reference<T>` 或 `Collection<T>` 对象中。这会导致 [Nest 内置的序列化器](/techniques/serialization) 无法正确识别这些被包装的关系。换言之，如果你在 HTTP 或 WebSocket 处理器中直接返回 MikroORM 实体，其所有关系字段都**无法被正确序列化**。
+</CalloutInfo>
+
+幸运的是，MikroORM 提供了一个[序列化 API](https://mikro-orm.io/docs/serializing)，可用于替代 `ClassSerializerInterceptor`。
+
+```ts
+@Entity()
+export class Book {
+  @Property({ hidden: true }) // 等同于 class-transformer 的 `@Exclude`
+  hiddenField = Date.now()
+
+  @Property({ persist: false }) // 类似于 class-transformer 的 `@Expose()`。该属性仅存于内存中，但会被序列化。
+  count?: number
+
+  @ManyToOne({
+    serializer: (value) => value.name,
+    serializedName: 'authorName',
+  }) // 等同于 class-transformer 的 `@Transform()`
+  author: Author
+}
+```
+
+## 在队列处理器中实现请求作用域
+
+正如[官方文档](https://mikro-orm.io/docs/identity-map)所述，为每个请求创建一个独立的上下文（`Request Context`）至关重要。通过中间件注册的 `RequestContext` 辅助工具可以自动处理这一过程。
+
+然而，中间件仅对常规的 HTTP 请求生效。如果我们需要在请求作用域之外（例如，在队列处理器或定时任务中）执行方法，该怎么办呢？
+
+此时，你可以使用 `@CreateRequestContext()` 装饰器。你首先需要将 `MikroORM` 实例注入到当前上下文中，之后装饰器便会利用该实例为你创建并运行一个独立的请求上下文。
+
+```ts
+@Injectable()
+export class MyService {
+  constructor(private readonly orm: MikroORM) {}
+
+  @CreateRequestContext()
+  async doSomething() {
+    // 这段代码会在独立的请求上下文中执行
+  }
+}
+```
+
+<CalloutInfo type="warning">
+  顾名思义，此装饰器**每次都会创建**一个新的上下文。其替代方案
+  `@EnsureRequestContext` 则只在当前不存在可用上下文时，才会创建新上下文。
+</CalloutInfo>
+
+## 测试
+
+`@mikro-orm/nestjs` 包提供了一个 `getRepositoryToken()` 函数。该函数会根据给定的实体返回一个预设的令牌（token），以便你轻松地模拟（mock）仓库。
+
+```ts
+@Module({
+  providers: [
+    PhotoService,
+    {
+      // 如果你有自定义仓库，也可以这样写：`provide: PhotoRepository`
+      provide: getRepositoryToken(Photo),
+      useValue: mockedRepository,
+    },
+  ],
+})
+export class PhotoModule {}
+```
+
+## 示例
+
+你可以在[这里](https://github.com/mikro-orm/nestjs-realworld-example-app)查看一个基于 NestJS 和 MikroORM 的真实项目示例。

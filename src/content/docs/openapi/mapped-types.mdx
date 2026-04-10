@@ -1,0 +1,135 @@
+# 映射类型
+
+在开发 CRUD (创建、读取、更新、删除) 功能时，我们常常需要基于一个基础实体类型来创建其变体。为了应对这种需求，Nest 提供了一系列实用函数，可以轻松地转换类型，从而显著减少样板代码。
+
+## Partial
+
+在构建 DTO 时，我们经常需要为**创建**（create）和 **更新**（update）操作分别定义变体。例如，创建 DTO 可能要求所有字段都必须提供，而更新 DTO 则可能希望所有字段都是可选的。
+
+Nest 提供了 `PartialType()` 这个实用函数来简化此过程，并减少样板代码。
+
+`PartialType()` 函数接收一个类型（类）作为参数，并返回一个新类型，其中原类型的所有属性都已设置为可选。例如，假设我们有一个 `CreateCatDto` 如下：
+
+```ts
+import { ApiProperty } from '@nestjs/swagger'
+
+export class CreateCatDto {
+  @ApiProperty()
+  name: string
+
+  @ApiProperty()
+  age: number
+
+  @ApiProperty()
+  breed: string
+}
+```
+
+默认情况下，`CreateCatDto` 的所有字段都是必需的。为了创建一个具有相同字段但所有字段都为可选的类型，我们可以使用 `PartialType()` 并传入 `CreateCatDto`：
+
+```ts
+import { PartialType } from '@nestjs/swagger'
+
+export class UpdateCatDto extends PartialType(CreateCatDto) {}
+```
+
+## Pick
+
+`PickType()` 函数通过从输入类型中选取一组指定的属性来构造一个新类型（类）。
+
+```ts
+import { ApiProperty } from '@nestjs/swagger'
+
+export class CreateCatDto {
+  @ApiProperty()
+  name: string
+
+  @ApiProperty()
+  age: number
+
+  @ApiProperty()
+  breed: string
+}
+```
+
+现在，我们可以使用 `PickType()` 从 `CreateCatDto` 中选取 `age` 和 `breed` 属性来创建一个新类型：
+
+```ts
+import { PickType } from '@nestjs/swagger'
+
+export class UpdateCatAgeDto extends PickType(CreateCatDto, [
+  'age',
+  'breed',
+] as const) {}
+```
+
+这会创建一个新类型 `UpdateCatAgeDto`，它只包含 `age` 和 `breed` 两个属性。
+
+## Omit
+
+`OmitType()` 函数通过从输入类型中选取所有属性，然后移除一组指定的属性来构造一个新类型。
+
+```ts
+import { ApiProperty } from '@nestjs/swagger'
+
+export class CreateCatDto {
+  @ApiProperty()
+  name: string
+
+  @ApiProperty()
+  age: number
+
+  @ApiProperty()
+  breed: string
+}
+```
+
+我们可以用它来创建一个新类型，它包含 `CreateCatDto` 中除了 `name` 之外的所有属性。如下所示，`OmitType()` 的第二个参数是一个包含要移除属性名称的数组：
+
+```ts
+import { OmitType } from '@nestjs/swagger'
+
+export class UpdateCatDto extends OmitType(CreateCatDto, ['name'] as const) {}
+```
+
+## Intersection
+
+`IntersectionType()` 函数可以将两个类型合并为一个新的组合类型（类）。
+
+```ts
+import { ApiProperty } from '@nestjs/swagger'
+
+class CreateCatDto {
+  @ApiProperty()
+  name: string
+
+  @ApiProperty()
+  breed: string
+}
+
+class AdditionalCatInfo {
+  @ApiProperty()
+  color: string
+}
+```
+
+现在，我们可以将这两个类型合并，创建一个包含它们所有属性的新类型：
+
+```ts
+import { IntersectionType } from '@nestjs/swagger'
+
+export class UpdateCatDto extends IntersectionType(
+  CreateCatDto,
+  AdditionalCatInfo
+) {}
+```
+
+## 组合使用（Composition）
+
+这些映射类型工具函数可以灵活地组合使用。例如，以下示例组合了 `OmitType()` 和 `PartialType()`。它创建了一个新类型，该类型继承了 `CreateCatDto` 中除 `name` 以外的所有属性，并将它们全部设为可选：
+
+```ts
+export class UpdateCatDto extends PartialType(
+  OmitType(CreateCatDto, ['name'] as const)
+) {}
+```

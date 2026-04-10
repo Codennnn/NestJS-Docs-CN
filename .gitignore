@@ -1,0 +1,57 @@
+# Dependencies
+node_modules/
+
+# Build Outputs
+.next/
+out/
+build/
+dist/
+
+# Environment Variables
+.env*
+!.env.example
+
+# TypeScript
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Logs and Caches
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-debug.log*
+.eslintcache
+.turbo/
+
+# Editor and System Files
+# 默认忽略 .vscode/ 下所有文件，仅保留插件推荐和公共任务配置
+# - settings.json：可能含本地解释器路径、私有插件配置，不纳入版本控制
+# - launch.json：调试配置常含 env 字段（API Key、连接字符串），不纳入版本控制
+#   如需共享调试配置，请使用 launch.json.example 并在其中仅写占位符
+.vscode/*
+!.vscode/tasks.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.DS_Store
+Thumbs.db
+
+# Docker
+docker-compose.override.yml
+.docker/
+
+# Coverage
+coverage/
+
+
+# Next.js / Vercel
+.vercel/
+
+# Linting Caches
+.stylelintcache
+
+# Local SSL Certificates
+*.pem
+*.crt
+*.key

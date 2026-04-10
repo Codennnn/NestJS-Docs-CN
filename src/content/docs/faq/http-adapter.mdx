@@ -1,0 +1,74 @@
+# HTTP 适配器
+
+在开发 Nest 应用时，有时你可能需要直接访问底层的原生 HTTP 服务器实例，例如 Express 或 Fastify。这种需求可能出现在应用上下文（`ApplicationContext`）内部，也可能出现在其外部。
+
+Nest 对每种特定平台的 HTTP 服务器都封装了一个对应的**适配器**，用于屏蔽平台差异，统一接口。这些适配器会作为全局提供者注册到依赖注入容器中，因此你可以在应用内部直接注入使用，或者通过应用上下文进行访问。
+
+## 获取 HttpAdapter 实例
+
+在 Nest 应用中，有时你可能需要直接访问底层的 HTTP 适配器（如 Express 或 Fastify 的实例）。Nest 提供了两种方式来获取 `HttpAdapter` 对象，分别适用于应用上下文外部和内部的使用场景。
+
+### 在应用上下文外部获取
+
+如果你在应用初始化逻辑中需要获取 HTTP 适配器实例，可以通过调用 `getHttpAdapter()` 方法实现：
+
+```ts filename='main.ts'
+const app = await NestFactory.create(AppModule)
+const httpAdapter = app.getHttpAdapter()
+```
+
+此时返回的 `httpAdapter` 即为底层框架的适配器对象，其类型可能是 `ExpressAdapter` 或 `FastifyAdapter`，两者都继承自 `AbstractHttpAdapter`。
+
+### 在应用上下文内部获取
+
+在服务类、守卫或其他依赖注入环境中，推荐通过注入 `HttpAdapterHost` 来间接访问 HTTP 适配器：
+
+```ts filename='cats.service.ts'
+import { HttpAdapterHost } from '@nestjs/core'
+
+export class CatsService {
+  constructor(private readonly adapterHost: HttpAdapterHost) {}
+}
+```
+
+需要注意的是，`HttpAdapterHost` 并不是实际的适配器对象，而是一个持有者（host）。你需要通过其 `.httpAdapter` 属性来获取真正的适配器实例：
+
+```ts
+const httpAdapter = this.adapterHost.httpAdapter
+```
+
+### 使用适配器实例
+
+适配器对象封装了多个与底层 HTTP 服务相关的实用方法。例如，若你希望直接访问底层框架的原始实例（如 Express 应用对象），可以调用 `getInstance()` 方法：
+
+```ts
+const instance = httpAdapter.getInstance()
+```
+
+## 监听 HTTP 服务启动事件
+
+在某些场景下，你可能希望在 HTTP 服务器成功启动并开始监听请求之后执行一些操作。Nest 提供了两种方式来实现这一需求。
+
+### 方式一：订阅 listen$ 事件流
+
+`HttpAdapterHost` 提供了一个名为 `listen$` 的 `Observable`，你可以通过订阅它，在服务器开始监听时执行自定义逻辑：
+
+```ts
+this.httpAdapterHost.listen$.subscribe(() => {
+  console.log('HTTP server is listening')
+})
+```
+
+这通常用于异步监听、日志记录或启动后的初始化操作等。
+
+### 方式二：读取 listening 状态属性
+
+如果你只是想在某处判断服务器是否已开始监听请求，可以使用 `HttpAdapterHost` 提供的 `listening` 布尔属性：
+
+```ts
+if (this.httpAdapterHost.listening) {
+  console.log('HTTP server is listening')
+}
+```
+
+这种方式适用于在逻辑分支中做出判断，而非监听事件的响应式场景。

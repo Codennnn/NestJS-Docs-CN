@@ -1,0 +1,160 @@
+# 自定义路由装饰器
+
+Nest 的核心架构建立在 TypeScript 提供的一个关键特性 —— **装饰器**（Decorator）之上。虽然装饰器在许多面向对象语言中早已被广泛应用，但在 JavaScript 世界中，它仍属于较新的语言能力。
+
+在深入使用 Nest 提供的各类装饰器（如 `@Controller()`、`@Injectable()`、`@Get()` 等）之前，建议你先阅读这篇[基础介绍文章](https://medium.com/google-developers/exploring-es7-decorators-76ecb65fb841)，以更好地理解装饰器的设计理念及其底层机制。
+
+下面是一段对装饰器的简要说明：
+
+> 装饰器本质上是一个函数。根据 ES2016 提案，它接收目标对象、属性名以及属性描述符等参数，并返回一个新的属性描述符或修改后的目标。通过在目标前添加 `@` 符号，即可将其标记为装饰器。
+
+## 参数装饰器
+
+Nest 提供了一组功能强大的参数装饰器，可与 HTTP 路由处理器无缝协作，帮助开发者高效提取请求中的常用信息。下表列出了常用的内置装饰器及其对应的原生 Express 或 Fastify 对象映射关系：
+
+| 装饰器                     | 对应对象                             |
+| :------------------------- | :----------------------------------- |
+| `@Request()` / `@Req()`    | `req`                                |
+| `@Response()` / `@Res()`   | `res`                                |
+| `@Next()`                  | `next`                               |
+| `@Session()`               | `req.session`                        |
+| `@Param(param?: string)`   | `req.params` / `req.params[param]`   |
+| `@Body(param?: string)`    | `req.body` / `req.body[param]`       |
+| `@Query(param?: string)`   | `req.query` / `req.query[param]`     |
+| `@Headers(param?: string)` | `req.headers` / `req.headers[param]` |
+| `@Ip()`                    | `req.ip`                             |
+| `@HostParam()`             | `req.hosts`                          |
+
+除了这些内置装饰器，Nest 还支持开发者创建**自定义参数装饰器**，这在实际项目中非常常见且实用。
+
+在传统的 Node.js 开发模式中，开发者通常会使用中间件将某些属性挂载到请求对象上，例如用户信息常被附加到 `req.user` 上。在这种情况下，如果不借助参数装饰器，你需要在每个路由处理函数中手动访问这些属性，例如：
+
+```ts
+const user = req.user
+```
+
+为了提升代码的复用性，你可以将这类访问逻辑封装为一个自定义装饰器，例如创建一个名为 `@User()` 的装饰器：
+
+```ts filename='user.decorator.ts'
+import { createParamDecorator, ExecutionContext } from '@nestjs/common'
+
+export const User = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest()
+    return request.user
+  }
+)
+```
+
+定义完成后，就可以在控制器方法中直接通过装饰器获取用户信息：
+
+```ts
+@Get()
+async findOne(@User() user: UserEntity) {
+  console.log(user)
+}
+```
+
+这种写法不仅让代码更加简洁，还体现了 Nest 鼓励的**声明式编程**风格，使逻辑结构更加清晰、职责划分更明确。
+
+## 向装饰器传递参数
+
+在某些场景下，装饰器的行为可能依赖于运行时的动态数据。此时，我们可以通过装饰器工厂函数的 `data` 参数传入额外信息，以实现更灵活的逻辑控制。
+
+一个常见的例子是：我们希望自定义一个装饰器，用于从请求对象中提取特定的用户属性。
+
+假设你的认证机制在用户通过身份验证后，会将用户实体（user entity）挂载到请求对象上，那么请求对象中的 `user` 属性可能类似于以下结构：
+
+```json
+{
+  "id": 101,
+  "firstName": "Alan",
+  "lastName": "Turing",
+  "email": "alan@email.com",
+  "roles": ["admin"]
+}
+```
+
+我们可以创建一个名为 `@User()` 的参数装饰器，支持传入属性名作为 `key`。该装饰器会从请求对象中获取用户实体，并返回指定属性的值。如果指定的 `key` 不存在，或请求对象中尚未附加用户数据，则返回 `undefined`：
+
+```ts filename='user.decorator.ts'
+import { createParamDecorator, ExecutionContext } from '@nestjs/common'
+
+export const User = createParamDecorator(
+  (data: string, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest()
+    const user = request.user
+
+    return data ? user?.[data] : user
+  }
+)
+```
+
+在控制器中，你可以像这样使用 `@User()` 装饰器，按需提取用户信息：
+
+```ts
+@Get()
+async findOne(@User('firstName') firstName: string) {
+  console.log(`Hello ${firstName}`)
+}
+```
+
+该装饰器支持灵活传参，能够提取用户对象中的任意属性。对于结构复杂或字段较多的用户对象，这种方式可以显著提升控制器方法的简洁性。
+
+<CalloutInfo>
+  `createParamDecorator<T>()` 是一个泛型函数，你可以通过泛型参数显式指定 `data` 的类型，例如：
+`createParamDecorator<string>((data, ctx) => ...)`。也可以直接在参数中声明类型：`(data: string, ctx) => ...`。如果都未指定，`data` 的类型将默认为 `any`。
+</CalloutInfo>
+
+## 配合管道使用
+
+在 Nest 中，自定义参数装饰器的执行流程与内置装饰器（如 `@Body()`、`@Param()`、`@Query()` 等）完全一致 —— 参数级的**管道**会按照顺序依次执行。因此，自定义装饰器同样能够自动继承并使用管道的处理能力，就像内置装饰器一样。
+
+此外，也可以在装饰器的参数中显式传入管道，实现更灵活的处理方式。例如：
+
+```ts
+@Get()
+async findOne(
+  @User(new ValidationPipe({ validateCustomDecorators: true }))
+  user: UserEntity,
+) {
+  console.log(user)
+}
+```
+
+<CalloutInfo type="warning">
+  使用 `ValidationPipe` 时，务必将其 `validateCustomDecorators` 选项设置为
+  `true`。否则，通过自定义装饰器注入的参数将不会被纳入校验流程。
+</CalloutInfo>
+
+## 装饰器的组合与复用
+
+Nest 提供了一个名为 `applyDecorators()` 的辅助函数，用于将多个装饰器组合成一个复合装饰器，便于统一复用。这个特性特别适合将一组具有特定功能的装饰器封装为一个语义清晰的自定义装饰器。例如，可以将涉及认证和权限控制的一组装饰器封装为一个名为 `@Auth()` 的装饰器：
+
+```ts filename='auth.decorator.ts'
+import { applyDecorators } from '@nestjs/common'
+
+export function Auth(...roles: Role[]) {
+  return applyDecorators(
+    SetMetadata('roles', roles),
+    UseGuards(AuthGuard, RolesGuard),
+    ApiBearerAuth(),
+    ApiUnauthorizedResponse({ description: '未授权' })
+  )
+}
+```
+
+其使用方式非常直观，只需在路由处理器上添加 `@Auth()`，即可一次性应用上述所有装饰器逻辑：
+
+```ts
+@Get('users')
+@Auth('admin')
+findAllUsers() {}
+```
+
+这样做不仅提升了代码的可读性，还增强了装饰器的复用性和语义表达力。
+
+<CalloutInfo type="warning">
+  由于实现机制的限制，`@nestjs/swagger` 中的 `@ApiHideProperty()`
+  装饰器**不能与** `applyDecorators()` **一起使用**，否则会导致运行时异常。
+</CalloutInfo>

@@ -1,0 +1,22 @@
+# 守卫
+
+微服务中的守卫与[常规 HTTP 应用的守卫](/guards)在本质上没有区别。
+唯一的不同在于，这里不应抛出 `HttpException`，而是应使用 `RpcException`。
+
+<CalloutInfo>
+
+`RpcException` 类由 `@nestjs/microservices` 包提供。
+
+</CalloutInfo>
+
+## 绑定守卫
+
+下例演示了方法作用域的守卫。与基于 HTTP 的应用一样，你也可以使用控制器作用域的守卫（即在控制器类前加上 `@UseGuards()` 装饰器）。
+
+```ts
+@UseGuards(AuthGuard)
+@MessagePattern({ cmd: 'sum' })
+accumulate(data: number[]): number {
+  return (data || []).reduce((a, b) => a + b)
+}
+```

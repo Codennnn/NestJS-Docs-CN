@@ -1,0 +1,32 @@
+# HTTP 长连接（Keep-Alive Connections）
+
+默认情况下，HTTP 会通过响应头 `Connection: Keep-Alive` 保持客户端与服务器之间的连接处于活跃状态，以便复用连接、提升性能。
+
+然而，在某些场景下，这些「未及时关闭的长连接」可能会阻止 NestJS 应用在收到关闭信号后正常退出，尤其是在你启用了 `enableShutdownHooks()`、希望实现优雅停机时。因为此时，应用会等待所有连接关闭之后，才会真正退出，而长连接可能导致这一过程被延迟甚至阻塞。
+
+为了解决这个问题，NestJS 提供了 `forceCloseConnections` 选项。启用该选项后，应用在关闭时会主动断开所有仍在活动状态的 HTTP 连接，从而确保进程能够及时退出。
+
+<CalloutInfo type="warning">
+大多数情况下你**无需**手动启用此选项。仅当你遇到如下情况时，才建议考虑开启它：
+
+- 调用 `app.close()` 后应用长时间无法退出；
+- 收到 `SIGTERM` 等系统信号后，进程没有如预期那样终止；
+- 在开发模式下，使用 `--watch` 标志运行 NestJS 应用，并启用了 `enableShutdownHooks()`，但应用无法自动重启。
+
+</CalloutInfo>
+
+## 使用方式
+
+在 `main.ts` 文件中创建应用时，通过 `NestFactory.create()` 启用该选项：
+
+```ts filename='main.ts'
+import { NestFactory } from '@nestjs/core'
+import { AppModule } from './app.module'
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule, {
+    forceCloseConnections: true,
+  })
+  await app.listen(process.env.PORT ?? 3000)
+}
+```

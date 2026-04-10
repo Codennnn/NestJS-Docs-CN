@@ -1,0 +1,28 @@
+services:
+  web:
+    platform: linux/amd64
+    image: nestjs-docs-web:latest
+    ports:
+      - "3001:8080" # 宿主机:容器内部
+    # 运行时凭据通过 env_file 注入，不在此处硬编码
+    # 复制 .env.example 为 .env.production 并填写真实值后取消注释：
+    # env_file:
+    #   - ../.env.production
+    # 或通过 environment 字段逐项传入（值从 shell 环境变量继承，不写死）：
+    # environment:
+    #   - NODE_ENV
+    #   - NEXT_PUBLIC_ORAMA_API_KEY
+    #   - NEXT_PUBLIC_ORAMA_ENDPOINT
+    #   - NEXT_PUBLIC_API_BASE
+    #   - NEXT_PUBLIC_API_PROXY_SOURCE
+    #   - NEXT_PUBLIC_API_PROXY_DESTINATION
+    #   - NEXT_PUBLIC_JWT_USE_COOKIE
+    #   - NEXT_PUBLIC_PROJECT_FLAG
+    restart: unless-stopped
+    # 如果后端也在 Docker 中运行，可以添加网络配置
+    # networks:
+    #   - app-network
+# 如果需要与其他服务（如数据库、后端API）连接，可以取消注释以下配置
+# networks:
+#   app-network:
+#     driver: bridge

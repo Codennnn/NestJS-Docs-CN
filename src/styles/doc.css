@@ -1,0 +1,41 @@
+/* 图片、Mermaid 图表、流程图等 */
+.illustrative-image,
+svg[role*='document'] {
+  filter: var(--images-filter);
+}
+
+code {
+  @apply font-mono font-medium;
+}
+
+:not(pre) > code {
+  @apply whitespace-nowrap bg-muted py-[0.08rem] px-1 rounded border border-border text-inherit;
+
+  &::before,
+  &::after {
+    @apply content-[''];
+  }
+}
+
+.dark {
+  :not(pre) > code {
+    @apply outline -outline-offset-2 outline-background;
+  }
+}
+
+[data-component='callout-info'] {
+  :not(pre) > code {
+    @apply bg-muted/70;
+  }
+}
+
+blockquote > p {
+  &::before,
+  &::after {
+    @apply content-[''];
+  }
+}
+
+strong {
+  @apply px-0.5;
+}

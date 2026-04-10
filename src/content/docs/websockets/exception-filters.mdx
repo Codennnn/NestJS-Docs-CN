@@ -1,0 +1,55 @@
+# 异常过滤器（Exception filters）
+
+HTTP [异常过滤器](/exception-filters)层与对应的 WebSocket 层唯一的区别在于，这里不再抛出 `HttpException`，而是应该使用 `WsException`。
+
+```ts
+throw new WsException('Invalid credentials.')
+```
+
+<CalloutInfo>
+
+`WsException` 类需从 `@nestjs/websockets` 包中导入。
+
+</CalloutInfo>
+
+如上示例所示，Nest 会自动处理抛出的异常，并发送一个结构如下的 `exception` 消息：
+
+```ts
+{
+  status: 'error',
+  message: 'Invalid credentials.'
+}
+```
+
+## 过滤器（Filters）
+
+WebSocket 异常过滤器的行为与 HTTP 异常过滤器完全一致。下面的示例演示了一个手动实例化的方法作用域过滤器。与基于 HTTP 的应用类似，你也可以使用网关作用域（gateway-scoped）的过滤器（即在网关类前加上 `@UseFilters()` 装饰器）。
+
+```ts
+@UseFilters(new WsExceptionFilter())
+@SubscribeMessage('events')
+onEvent(client, data: any): WsResponse<any> {
+  const event = 'events'
+  return { event, data }
+}
+```
+
+## 继承（Inheritance）
+
+通常，你会根据应用需求自定义异常过滤器。不过，在某些场景下，你可能只需扩展**核心异常过滤器（core exception filter）**，并根据特定条件重写其行为。
+
+要将异常处理委托给基础过滤器，需要继承 `BaseWsExceptionFilter` 并调用其继承的 `catch()` 方法。
+
+```ts
+import { Catch, ArgumentsHost } from '@nestjs/common'
+import { BaseWsExceptionFilter } from '@nestjs/websockets'
+
+@Catch()
+export class AllExceptionsFilter extends BaseWsExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    super.catch(exception, host)
+  }
+}
+```
+
+上述实现仅为演示用的外壳，展示了扩展方式。你实际扩展的异常过滤器应包含你自定义的**业务逻辑**（如处理多种条件等）。

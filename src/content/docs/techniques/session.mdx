@@ -1,0 +1,131 @@
+# Session（会话）
+
+在 Web 应用中，**HTTP 会话**提供了一种跨多个请求持久保存用户信息的机制，这对于基于 [MVC](/techniques/mvc) 架构 的应用尤其重要。
+
+## 在 Express（默认）中使用
+
+Nest 默认使用 Express 作为底层框架。若要在应用中使用 session，需先安装[相关依赖](https://github.com/expressjs/session)：
+
+```bash
+npm install express-session
+npm install -D @types/express-session
+```
+
+安装完成后，可在入口文件（如 `main.ts`）中引入并注册 `express-session` 中间件：
+
+```ts filename='main.ts'
+import * as session from 'express-session'
+
+app.use(
+  session({
+    secret: 'my-secret',
+    resave: false,
+    saveUninitialized: false,
+  })
+)
+```
+
+<CalloutInfo type="warning">
+  `express-session`
+  默认将会话数据存储在内存中，这种方式**不适用于生产环境**。它可能导致内存泄漏，且无法支持多进程部署，因此仅推荐用于开发调试。详细说明参见
+  [官方仓库](https://github.com/expressjs/session)。
+</CalloutInfo>
+
+### 关键配置项说明
+
+- `secret`
+  会话 ID Cookie 的签名密钥，可以是单个字符串或字符串数组。如果提供数组，只有第一个元素用于签名，其他用于验证。密钥应具有高复杂度，推荐使用随机生成字符串。
+- `resave`
+  是否在每次请求时强制保存会话，即使内容未修改。虽然默认值为 `true`，但已被标记为弃用，建议显式设置为 `false` 以提升性能。
+- `saveUninitialized`
+  是否将**未初始化的会话**保存到存储中。所谓「未初始化」，是指新建但尚未被修改的会话。设置为 false 可有效降低存储开销、避免竞态条件，并符合某些隐私法规（如需用户同意后才能设置 Cookie）。
+
+你还可以配置更多选项，详见[官方 API 文档](https://github.com/expressjs/session#options)。
+
+<CalloutInfo>
+推荐启用 `secure: true` 选项，以确保 Cookie 仅在 HTTPS 下发送。但请注意：
+
+- 若开启该选项，应用必须通过 HTTPS 部署；
+- 若应用部署在代理服务器之后，务必在 Express 中调用 `app.set('trust proxy', 1)` 启用代理信任。
+
+</CalloutInfo>
+
+### 在控制器中使用 Session
+
+完成配置后，即可在控制器中访问和操作会话数据。你可以通过 `@Req()` 装饰器访问原始请求对象中的 `session` 属性：
+
+```ts
+import { Req } from '@nestjs/common'
+import type { Request } from 'express'
+
+@Get()
+findAll(@Req() request: Request) {
+  request.session.visits = request.session.visits ? request.session.visits + 1 : 1
+}
+```
+
+除了 `@Req()`，Nest 还提供了专用的 `@Session()` 装饰器，可直接提取会话对象，使代码更加简洁：
+
+```ts
+import { Session } from '@nestjs/common'
+
+@Get()
+findAll(@Session() session: Record<string, any>) {
+  session.visits = session.visits ? session.visits + 1 : 1
+}
+```
+
+## 在 Fastify 中使用
+
+当 Nest 应用基于 Fastify 构建时，需使用 Fastify 提供的专属 session 插件。首先安装所需依赖：
+
+```bash
+$ npm install @fastify/secure-session
+```
+
+安装完成后，在应用初始化阶段注册 `@fastify/secure-session` 插件：
+
+```ts filename='main.ts'
+import secureSession from '@fastify/secure-session'
+
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter()
+)
+
+await app.register(secureSession, {
+  secret: 'averylogphrasebiggerthanthirtytwochars', // 建议使用长度超过 32 个字符的密钥
+  salt: 'mq9hDxBVDbspDR6n',
+})
+```
+
+<CalloutInfo>
+  密钥也可以通过工具预生成，具体方法请参见[官方文档](https://github.com/fastify/fastify-secure-session)。若有密钥轮换需求，可参考其[密钥轮换机制](https://github.com/fastify/fastify-secure-session#using-keys-with-key-rotation)。
+</CalloutInfo>
+
+更多配置项说明请查看[官方仓库](https://github.com/fastify/fastify-secure-session)。
+
+### 在控制器中访问 Session
+
+完成插件注册后，即可在路由处理器中通过 `request.session` 获取和操作会话数据。例如：
+
+```ts
+@Get()
+findAll(@Req() request: FastifyRequest) {
+  const visits = request.session.get('visits')
+  request.session.set('visits', visits ? visits + 1 : 1)
+}
+```
+
+Nest 也支持使用 `@Session()` 装饰器，直接从请求中提取会话对象，使代码更简洁：
+
+```ts
+import { Session } from '@nestjs/common'
+import * as secureSession from '@fastify/secure-session'
+
+@Get()
+findAll(@Session() session: secureSession.Session) {
+  const visits = session.get('visits')
+  session.set('visits', visits ? visits + 1 : 1)
+}
+```

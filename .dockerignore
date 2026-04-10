@@ -1,0 +1,61 @@
+# ============================================================
+# .dockerignore — 排除不应进入 Docker 构建上下文的文件
+# ============================================================
+
+# 依赖（镜像内重新安装）
+node_modules
+
+# 构建产物（镜像内重新构建）
+.next
+out
+build
+dist
+
+# 版本控制
+.git
+.gitignore
+
+# 文档（不影响构建）
+README.md
+*.md
+
+# Docker 自身配置文件（避免循环复制）
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# 环境变量 — 通配符覆盖所有变体，防止真实凭据进入构建层
+.env*
+!.env.example
+
+# SSL 证书与密钥
+*.pem
+*.key
+*.crt
+
+# 日志
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 测试覆盖率
+coverage
+.nyc_output
+
+# 编辑器与 IDE 配置（含本地路径/调试变量）
+.vscode
+.idea
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 缓存与增量构建信息
+.cache
+.turbo
+.eslintcache
+.stylelintcache
+tsconfig.tsbuildinfo
+*.tsbuildinfo

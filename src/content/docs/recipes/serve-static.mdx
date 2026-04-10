@@ -1,0 +1,251 @@
+import { FileTree } from '~/components/doc/FileTree'
+
+# 静态资源服务
+
+在实际的 Web 应用开发中，我们经常需要在同一个服务器上同时提供 API 接口和静态文件服务。例如：
+
+- **部署前端应用**：将 React、Vue、Angular 等单页应用的构建产物托管在 NestJS 服务器上。
+- **文件下载服务**：提供用户上传的图片、文档等文件的访问入口。
+- **静态资源托管**：托管 CSS、JS、图片等静态资源文件。
+- **混合部署**：在一个服务器实例上同时运行后端 API 和前端应用，简化部署架构。
+
+NestJS 的 `@nestjs/serve-static` 包正是为了解决这些需求而设计的。它可以让你的 NestJS 应用同时充当 API 服务器和静态文件服务器。
+
+## 典型应用场景
+
+### 场景 1：全栈应用部署
+
+你有一个 React 前端项目和 NestJS 后端项目，希望部署在同一个服务器上：
+
+<FileTree
+  data={[
+    { name: 'backend', type: 'folder', comment: 'NestJS 应用' },
+    { name: 'frontend', type: 'folder', comment: 'React 应用' },
+    {
+      name: 'dist',
+      type: 'folder',
+      comment: 'React 构建后的静态文件',
+    },
+  ]}
+/>
+
+通过 `ServeStaticModule`，你可以让 NestJS 应用：
+
+- 处理 `/api/*` 路径的 API 请求。
+- 自动托管前端应用的所有静态文件。
+- 支持前端路由（SPA 路由）。
+
+### 场景 2：文件上传与下载系统
+
+你开发了一个文件管理系统，用户可以上传文件，然后通过 URL 直接访问：
+
+```
+上传的文件存储在：/uploads/documents/report.pdf
+用户可通过访问：http://yourapp.com/files/report.pdf
+```
+
+## 安装
+
+首先，安装所需的依赖包：
+
+```bash
+npm install @nestjs/serve-static
+```
+
+## 基础配置
+
+### 托管单页应用（SPA）
+
+最常见的用法是托管前端单页应用。在根模块中配置：
+
+```ts
+import { Module } from '@nestjs/common'
+import { AppController } from './app.controller'
+import { AppService } from './app.service'
+import { ServeStaticModule } from '@nestjs/serve-static'
+import { join } from 'node:path'
+
+@Module({
+  imports: [
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'client'), // 指向前端构建产物目录
+      exclude: ['/api/(.*)'], // 排除 API 路由，避免冲突
+    }),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+```
+
+这样配置后：
+
+- 访问 `http://localhost:3000/` 会返回 `client/index.html`。
+- 访问 `http://localhost:3000/about` 也会返回 `client/index.html`（支持前端路由）。
+- 访问 `http://localhost:3000/api/users` 会正常调用你的 API 控制器。
+
+### 托管多个静态目录
+
+如果你需要托管多个不同用途的静态文件目录：
+
+```ts
+@Module({
+  imports: [
+    ServeStaticModule.forRoot(
+      {
+        rootPath: join(__dirname, '..', 'public'), // 公共资源
+        serveRoot: '/assets', // 通过 /assets/* 访问
+      },
+      {
+        rootPath: join(__dirname, '..', 'uploads'), // 用户上传文件
+        serveRoot: '/files', // 通过 /files/* 访问
+      }
+    ),
+  ],
+  // ...
+})
+export class AppModule {}
+```
+
+这样你就可以：
+
+- 通过 `/assets/logo.png` 访问 `public/logo.png`。
+- 通过 `/files/document.pdf` 访问 `uploads/document.pdf`。
+
+## 高级配置选项
+
+`ServeStaticModule` 提供了丰富的配置选项来满足不同需求：
+
+### 缓存控制
+
+为静态文件设置合适的缓存策略：
+
+```ts
+ServeStaticModule.forRoot({
+  rootPath: join(__dirname, '..', 'client'),
+  serveStaticOptions: {
+    cacheControl: 'public, max-age=31536000', // 缓存一年
+  },
+})
+```
+
+### 自定义 404 处理
+
+当文件不存在时的处理方式：
+
+```ts
+ServeStaticModule.forRoot({
+  rootPath: join(__dirname, '..', 'client'),
+  renderPath: '/', // 所有路径都返回根目录的 index.html
+  serveStaticOptions: {
+    fallthrough: false, // 不存在的文件直接返回 404
+  },
+})
+```
+
+### Fastify 适配器支持
+
+如果你使用的是 Fastify 而不是 Express：
+
+```ts
+ServeStaticModule.forRoot({
+  rootPath: join(__dirname, '..', 'client'),
+  serveStaticOptions: {
+    fallthrough: true, // Fastify 需要启用此选项以支持 SPA 路由
+  },
+})
+```
+
+<CalloutInfo title="为什么需要 exclude 配置？">
+当你同时托管前端应用和提供 API 服务时，需要明确区分哪些路径由静态文件处理，哪些由 API 控制器处理。`exclude: ['/api/(.*)']` 确保所有以 `/api/` 开头的请求都交给你的控制器处理，而不是尝试寻找对应的静态文件。
+
+</CalloutInfo>
+
+<CalloutInfo type="warning" title="SPA 路由支持说明">
+默认情况下，模块会将所有未匹配到静态文件的请求都指向 `index.html`，这样前端路由（如 React Router）就能正常工作。当用户直接访问 `http://yourapp.com/products/123` 时，即使服务器上没有对应的文件，也会返回 `index.html`，然后由前端 JavaScript 处理路由跳转。
+
+如果你使用 Fastify 适配器，务必将 `fallthrough` 设置为 `true`，否则 SPA 路由将无法正常工作。
+
+</CalloutInfo>
+
+## 实际使用示例
+
+### 示例 1：博客系统
+
+假设你开发了一个博客系统，目录结构如下：
+
+<FileTree
+  data={[
+    {
+      name: 'my-blog',
+      type: 'folder',
+      children: [
+        {
+          name: 'src',
+          type: 'folder',
+          comment: 'NestJS 后端代码',
+        },
+        {
+          name: 'admin-panel',
+          type: 'folder',
+          comment: '管理后台，React 应用',
+        },
+        {
+          name: 'blog-frontend',
+          type: 'folder',
+          comment: '博客前端，Next.js 静态导出',
+        },
+        {
+          name: 'uploads',
+          type: 'folder',
+          comment: '用户上传的图片',
+        },
+      ],
+    },
+  ]}
+/>
+
+配置示例：
+
+```ts
+ServeStaticModule.forRoot(
+  {
+    rootPath: join(__dirname, '..', 'blog-frontend'),
+    exclude: ['/api/(.*)'], // API 路由
+  },
+  {
+    rootPath: join(__dirname, '..', 'admin-panel'),
+    serveRoot: '/admin', // 管理后台通过 /admin 访问
+  },
+  {
+    rootPath: join(__dirname, '..', 'uploads'),
+    serveRoot: '/images', // 图片通过 /images 访问
+  }
+)
+```
+
+### 示例 2：企业官网 + API
+
+企业官网需要同时提供静态页面和 API 接口：
+
+```ts
+ServeStaticModule.forRoot({
+  rootPath: join(__dirname, '..', 'website-dist'),
+  exclude: ['/api/(.*)'], // API 接口
+  serveStaticOptions: {
+    cacheControl: 'public, max-age=86400', // 缓存 24 小时
+  },
+})
+```
+
+现在访问：
+
+- `https://company.com/` → 官网首页。
+- `https://company.com/about` → 关于我们页面。
+- `https://company.com/api/contact` → 联系表单 API。
+
+## 更多资源
+
+完整的配置选项说明请参见 [serve-static-options.interface.ts](https://github.com/nestjs/serve-static/blob/master/lib/interfaces/serve-static-options.interface.ts)。
+
+你也可以查看官方提供的[完整示例](https://github.com/nestjs/nest/tree/master/sample/24-serve-static)来了解更多用法。

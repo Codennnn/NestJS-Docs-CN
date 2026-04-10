@@ -1,0 +1,110 @@
+# Helmet 安全中间件
+
+[Helmet](https://github.com/helmetjs/helmet) 是一组可帮助提升 Web 应用安全性的中间件集合。它通过设置一系列合适的 HTTP 头部，防止常见的 Web 漏洞攻击，例如跨站脚本（XSS）、点击劫持等。Helmet 实际上由多个独立的中间件函数组成，每个函数负责配置一个具体的安全相关 HTTP 头部。详细信息请参考[官方文档](https://github.com/helmetjs/helmet#how-it-works)。
+
+<CalloutInfo>
+  请注意，`helmet` 无论作为全局中间件还是局部中间件，都**必须在所有 `app.use()`
+  调用和路由定义**之前注册。因为底层平台会按照中间件的注册顺序依次处理请求，如果在路由之后再引入
+  `helmet` 或 `cors` 这类中间件，它们将**无法生效于先前已定义的路由**。
+</CalloutInfo>
+
+## 在 Express 中使用
+
+首先，安装必要的依赖项：
+
+```bash
+npm install helmet
+```
+
+安装完成后，将 `helmet` 注册为全局中间件：
+
+```ts filename='main.ts'
+import helmet from 'helmet'
+
+app.use(helmet())
+```
+
+<CalloutInfo>
+如果你的应用同时使用了 `helmet`、`@apollo/server`（v4 版本）以及 [Apollo Sandbox](/graphql/quick-start#apollo-sandbox沙盒)，可能会遇到由于 [内容安全策略（CSP）](https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CSP) 限制导致 Sandbox 无法加载的问题。为解决该问题，可以对 `helmet` 进行如下配置：
+
+```ts
+app.use(
+  helmet({
+    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        imgSrc: [
+          `'self'`,
+          'data:',
+          'apollo-server-landing-page.cdn.apollographql.com',
+        ],
+        scriptSrc: [`'self'`, `https: 'unsafe-inline'`],
+        manifestSrc: [
+          `'self'`,
+          'apollo-server-landing-page.cdn.apollographql.com',
+        ],
+        frameSrc: [`'self'`, 'sandbox.embed.apollographql.com'],
+      },
+    },
+  })
+)
+```
+
+</CalloutInfo>
+
+## 在 Fastify 中使用
+
+如果你使用的是 `FastifyAdapter`，需要额外安装 `@fastify/helmet` 模块：
+
+```bash
+npm install @fastify/helmet
+```
+
+与 Express 不同，`@fastify/helmet` 不应作为中间件使用，而应通过 `app.register()` 方法注册为 [Fastify 插件](https://www.fastify.io/docs/latest/Reference/Plugins/)：
+
+与 Express 中作为中间件使用的方式不同，`@fastify/helmet` 应通过 `app.register()` 方法注册为 [Fastify 插件](https://www.fastify.io/docs/latest/Reference/Plugins/)：
+
+```ts filename='main.ts'
+import helmet from '@fastify/helmet'
+
+await app.register(helmet)
+```
+
+<CalloutInfo type="warning">
+当 `@fastify/helmet` 与 `apollo-server-fastify` 一同使用时，GraphQL Playground 可能因内容安全策略（CSP）冲突而无法正常加载。为解决此问题，可按以下方式自定义 CSP 配置：
+
+```ts
+await app.register(fastifyHelmet, {
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: [`'self'`, 'unpkg.com'],
+      styleSrc: [
+        `'self'`,
+        `'unsafe-inline'`,
+        'cdn.jsdelivr.net',
+        'fonts.googleapis.com',
+        'unpkg.com',
+      ],
+      fontSrc: [`'self'`, 'fonts.gstatic.com', 'data:'],
+      imgSrc: [`'self'`, 'data:', 'cdn.jsdelivr.net'],
+      scriptSrc: [
+        `'self'`,
+        `'unsafe-inline'`,
+        'https:',
+        'cdn.jsdelivr.net',
+        `'unsafe-eval'`,
+      ],
+    },
+  },
+})
+```
+
+如果你希望**完全禁用 CSP**，可以如下配置：
+
+```ts
+await app.register(fastifyHelmet, {
+  contentSecurityPolicy: false,
+})
+```
+
+</CalloutInfo>

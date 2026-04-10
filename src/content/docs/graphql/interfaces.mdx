@@ -1,0 +1,140 @@
+# 接口
+
+和许多类型系统一样，GraphQL 支持接口（Interface）。接口是一种抽象类型，包含一组特定字段，某个类型若要实现该接口，必须包含这些字段（详细内容可参见[这里](https://graphql.org/learn/schema/#interfaces)）。
+
+## 代码优先（Code first）
+
+在代码优先的方式下，你可以通过创建一个带有 `@InterfaceType()` 装饰器（由 `@nestjs/graphql` 导出）的抽象类来定义 GraphQL 接口：
+
+```ts
+import { Field, ID, InterfaceType } from '@nestjs/graphql'
+
+@InterfaceType()
+export abstract class Character {
+  @Field(() => ID)
+  id: string
+
+  @Field()
+  name: string
+}
+```
+
+<CalloutInfo type="warning">
+
+TypeScript 的 interface 不能用于定义 GraphQL 接口。
+
+</CalloutInfo>
+
+这样会在生成的 GraphQL 模式（Schema）SDL 中产生如下内容：
+
+```graphql
+interface Character {
+  id: ID!
+  name: String!
+}
+```
+
+现在，如果你想实现 `Character` 接口，可以使用 `implements` 关键字：
+
+```ts
+@ObjectType({
+  implements: () => [Character],
+})
+export class Human implements Character {
+  id: string
+  name: string
+}
+```
+
+<CalloutInfo>
+  <div>`@ObjectType()` 装饰器同样由 `@nestjs/graphql` 包导出。</div>
+</CalloutInfo>
+
+库默认生成的 `resolveType()` 类型解析函数会根据解析器方法返回的值来提取类型。这意味着你必须返回类的实例（不能返回普通的 JavaScript 字面量对象）。
+
+如果你需要自定义 `resolveType()` 类型解析函数，可以通过在 `@InterfaceType()` 装饰器的选项对象中传入 `resolveType` 属性来实现，如下所示：
+
+```ts
+@InterfaceType({
+  resolveType(book) {
+    if (book.colors) {
+      return ColoringBook
+    }
+    return TextBook
+  },
+})
+export abstract class Book {
+  @Field(() => ID)
+  id: string
+
+  @Field()
+  title: string
+}
+```
+
+## 接口解析器（Interface resolvers）
+
+到目前为止，使用接口只能让对象共享字段定义。如果你还希望共享实际的字段解析器实现，可以像下面这样创建专门的接口解析器：
+
+```ts
+import { Resolver, ResolveField, Parent, Info } from '@nestjs/graphql'
+
+@Resolver((type) => Character) // 注意：Character 是接口
+export class CharacterInterfaceResolver {
+  @ResolveField(() => [Character])
+  friends(
+    @Parent() character, // 已解析的实现 Character 接口的对象
+    @Info() { parentType }, // 实现 Character 接口的对象类型
+    @Args('search', { type: () => String }) searchTerm: string
+  ) {
+    // 获取角色的朋友
+    return []
+  }
+}
+```
+
+现在，`friends` 字段解析器会自动注册到所有实现了 `Character` 接口的对象类型上。
+
+<CalloutInfo type="warning">
+  这需要在 `GraphQLModule` 配置中将 `inheritResolversFromInterfaces` 属性设置为
+  true。
+</CalloutInfo>
+
+## 模式优先（Schema first）
+
+在模式优先方式下，只需用 SDL 创建一个 GraphQL 接口即可：
+
+```graphql
+interface Character {
+  id: ID!
+  name: String!
+}
+```
+
+然后，你可以使用类型定义自动生成功能（具体见[快速开始](/graphql/quick-start)章节）来生成对应的 TypeScript 类型定义：
+
+```ts
+export interface Character {
+  id: string
+  name: string
+}
+```
+
+接口在解析器映射中需要额外的 `__resolveType` 字段，用于确定接口最终解析到哪个类型。我们可以创建一个 `CharactersResolver` 类，并定义 `__resolveType` 方法：
+
+```ts
+@Resolver('Character')
+export class CharactersResolver {
+  @ResolveField()
+  __resolveType(value) {
+    if ('age' in value) {
+      return Person
+    }
+    return null
+  }
+}
+```
+
+<CalloutInfo>
+  <div>所有装饰器均由 `@nestjs/graphql` 包导出。</div>
+</CalloutInfo>

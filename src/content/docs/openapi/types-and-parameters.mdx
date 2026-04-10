@@ -1,0 +1,406 @@
+import swaggerDtoImage from '/public/assets/swagger-dto.png'
+import swaggerDto2Image from '/public/assets/swagger-dto2.png'
+import enumQueryImage from '/public/assets/enum_query.gif'
+import enumQueryArrayImage from '/public/assets/enum_query_array.gif'
+
+# 类型与参数
+
+`SwaggerModule` 会扫描路由处理器中的 `@Body()`、`@Query()` 和 `@Param()` 装饰器来生成 API 文档。同时，它利用反射机制自动创建对应的模型定义。例如：
+
+```ts
+@Post()
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto)
+}
+```
+
+<CalloutInfo>
+  如果需要手动指定请求体的结构，可以使用从 `@nestjs/swagger` 导入的 `@ApiBody()`
+  装饰器。
+</CalloutInfo>
+
+Swagger UI 将根据 `CreateCatDto` 生成以下模型定义：
+
+<DocImage src={swaggerDtoImage} alt="Swagger DTO" />
+
+如上图所示，尽管 `CreateCatDto` 类中已经声明了多个属性，但生成的模型定义仍然是空的。
+
+为了解决这个问题，需要为每个属性添加 `@ApiProperty()` 装饰器，这样 `SwaggerModule` 才能正确识别并展示这些字段。
+另一种更省力的方式是使用 [CLI 插件][cli-plugin]，它可以自动为你完成这些注解的生成。
+
+```ts
+import { ApiProperty } from '@nestjs/swagger'
+
+export class CreateCatDto {
+  @ApiProperty()
+  name: string
+
+  @ApiProperty()
+  age: number
+
+  @ApiProperty()
+  breed: string
+}
+```
+
+<CalloutInfo>
+  如果你不想为每个属性手动添加装饰器，可以考虑使用 [Swagger
+  插件][cli-plugin]，它会自动完成此操作。
+</CalloutInfo>
+
+更新代码后，你可以在浏览器中看到 `CreateCatDto` 的模型定义已经包含了所有属性：
+
+<DocImage src={swaggerDto2Image} alt="Swagger DTO" />
+
+此外，`@ApiProperty()` 装饰器还允许你配置多种 [Schema Object](https://swagger.io/specification/#schemaObject) 属性，例如：
+
+```ts
+@ApiProperty({
+  description: '猫的年龄',
+  minimum: 1,
+  default: 1,
+})
+age: number
+```
+
+<CalloutInfo>
+  如果你想让属性变为可选项，可以直接使用 `@ApiPropertyOptional()` 装饰器，这等同于 `{{"@ApiProperty({ required: false })"}}` 写法。
+</CalloutInfo>
+
+如果需要显式定义属性的类型，可以在 `@ApiProperty()` 装饰器中通过 `type` 键来指定：
+
+```ts
+@ApiProperty({
+  type: Number,
+})
+age: number
+```
+
+## 数组
+
+如果属性是数组，你需要手动指定其类型，如下所示：
+
+```ts
+@ApiProperty({ type: [String] })
+names: string[]
+```
+
+<CalloutInfo>
+  建议使用 [Swagger 插件][cli-plugin]，该插件会自动检测数组类型。
+</CalloutInfo>
+
+一种方法是如上所示，将类型作为数组的第一个元素传入；另一种方法是将 `isArray` 属性设置为 `true`。
+
+## 循环依赖
+
+当类之间存在循环依赖时，你可以使用惰性函数（lazy function）为 `SwaggerModule` 提供类型信息：
+
+```ts
+@ApiProperty({ type: () => Node })
+node: Node
+```
+
+<CalloutInfo>
+  建议使用 [Swagger 插件][cli-plugin]，该插件会自动检测循环依赖。
+</CalloutInfo>
+
+## 泛型与接口
+
+由于 TypeScript 不存储泛型或接口的元数据，因此当你在 DTO 中使用它们时，`SwaggerModule` 可能无法在运行时正确地生成模型定义。例如，`SwaggerModule` 将无法正确识别以下代码：
+
+```ts
+createBulk(@Body() usersDto: CreateUserDto[])
+```
+
+要解决此限制，你可以显式地设置类型：
+
+```ts
+@ApiBody({ type: [CreateUserDto] })
+createBulk(@Body() usersDto: CreateUserDto[])
+```
+
+## 枚举
+
+要让 `SwaggerModule` 识别枚举，你需要在 `@ApiProperty()` 装饰器中手动设置 `enum` 属性，并传入一个包含枚举值的数组。
+
+```ts
+@ApiProperty({ enum: ['Admin', 'Moderator', 'User']})
+role: UserRole
+```
+
+或者，你也可以定义一个实际的 TypeScript 枚举，如下所示：
+
+```ts
+export enum UserRole {
+  Admin = 'Admin',
+  Moderator = 'Moderator',
+  User = 'User',
+}
+```
+
+然后，你便可以将此枚举与 `@Query()` 和 `@ApiQuery()` 装饰器结合使用。
+
+```ts
+@ApiQuery({ name: 'role', enum: UserRole })
+async filterByRole(@Query('role') role: UserRole = UserRole.User) {}
+```
+
+<DocImage src={enumQueryImage} alt="Enum Query" placeholder={undefined} />
+
+如果将 `isArray` 设置为 **true**，枚举就可以作为多选列表呈现：
+
+<DocImage
+  src={enumQueryArrayImage}
+  alt="Enum Query Array"
+  placeholder={undefined}
+/>
+
+## 枚举 Schema
+
+默认情况下，`enum` 属性会为 `parameter` 添加一个原始的[枚举](https://swagger.io/docs/specification/data-models/enums/) 定义。
+
+```yaml
+- breed:
+    type: 'string'
+    enum:
+      - Persian
+      - Tabby
+      - Siamese
+```
+
+上述规范在大多数场景下都能正常工作。然而，若使用某些工具根据该规范生成**客户端代码**（client-side code），可能会遇到生成的代码中出现重复 `枚举` 的问题。请参考以下代码片段：
+
+```ts
+// 生成的客户端代码
+export class CatDetail {
+  breed: CatDetailEnum
+}
+
+export class CatInformation {
+  breed: CatInformationEnum
+}
+
+export enum CatDetailEnum {
+  Persian = 'Persian',
+  Tabby = 'Tabby',
+  Siamese = 'Siamese',
+}
+
+export enum CatInformationEnum {
+  Persian = 'Persian',
+  Tabby = 'Tabby',
+  Siamese = 'Siamese',
+}
+```
+
+<CalloutInfo>
+  <div>
+    以上代码片段由 [NSwag](https://github.com/RicoSuter/NSwag) 工具生成。
+  </div>
+</CalloutInfo>
+
+你会发现，生成的代码中出现了两个完全相同的 `枚举`。
+要解决此问题，你可以在装饰器中为 `enum` 属性额外指定一个 `enumName`。
+
+```ts
+export class CatDetail {
+  @ApiProperty({ enum: CatBreed, enumName: 'CatBreed' })
+  breed: CatBreed
+}
+```
+
+通过 `enumName` 属性，`@nestjs/swagger` 会将 `CatBreed` 转换为一个独立的 `schema`，从而使 `CatBreed` 枚举可以复用。生成的规范如下所示：
+
+```yaml
+CatDetail:
+  type: 'object'
+  properties:
+    ...
+    - breed:
+        schema:
+          $ref: '#/components/schemas/CatBreed'
+CatBreed:
+  type: string
+  enum:
+    - Persian
+    - Tabby
+    - Siamese
+```
+
+<CalloutInfo>
+  <div>任何支持 `enum` 属性的装饰器，也都支持 `enumName` 属性。</div>
+</CalloutInfo>
+
+## 属性值示例
+
+你可以使用 `example` 键为属性设置单个示例，如下所示：
+
+```ts
+@ApiProperty({
+  example: 'persian',
+})
+breed: string
+```
+
+如果希望提供多个示例，可以使用 `examples` 键并传入以下结构的对象：
+
+```ts
+@ApiProperty({
+  examples: {
+    Persian: { value: 'persian' },
+    Tabby: { value: 'tabby' },
+    Siamese: { value: 'siamese' },
+    'Scottish Fold': { value: 'scottish_fold' },
+  },
+})
+breed: string
+```
+
+## 原始定义
+
+在某些情况下（例如深度嵌套的数组或矩阵），你可能需要手动定义类型：
+
+```ts
+@ApiProperty({
+  type: 'array',
+  items: {
+    type: 'array',
+    items: {
+      type: 'number',
+    },
+  },
+})
+coords: number[][]
+```
+
+你也可以像下面这样指定原始对象（raw object）模式：
+
+```ts
+@ApiProperty({
+  type: 'object',
+  properties: {
+    name: {
+      type: 'string',
+      example: 'Error'
+    },
+    status: {
+      type: 'number',
+      example: 400
+    }
+  },
+  required: ['name', 'status']
+})
+rawDefinition: Record<string, any>
+```
+
+如果你需要在控制器类中手动定义输入/输出内容，可以使用 `schema` 属性：
+
+```ts
+@ApiBody({
+  schema: {
+    type: 'array',
+    items: {
+      type: 'array',
+      items: {
+        type: 'number',
+      },
+    },
+  },
+})
+async create(@Body() coords: number[][]) {}
+```
+
+## 额外模型
+
+在某些场景下，你可能需要定义一些模型，它们虽未在控制器中直接作为类型引用，但仍需被 Swagger 模块扫描。此时，可以使用 `@ApiExtraModels()` 装饰器来注册它们：
+
+```ts
+@ApiExtraModels(ExtraModel)
+export class CreateCatDto {}
+```
+
+<CalloutInfo>
+
+`@ApiExtraModels()` 装饰器只需对同一个模型类应用一次。
+
+</CalloutInfo>
+
+此外，你也可以在调用 `SwaggerModule.createDocument()` 方法时，通过 `extraModels` 选项来传递额外模型数组：
+
+```ts
+const documentFactory = () =>
+  SwaggerModule.createDocument(app, options, {
+    extraModels: [ExtraModel],
+  })
+```
+
+如需获取某个模型的引用（`$ref`），可以使用 `getSchemaPath(ExtraModel)` 函数：
+
+```ts
+'application/vnd.api+json': {
+   schema: { $ref: getSchemaPath(ExtraModel) },
+},
+```
+
+## oneOf、anyOf、allOf
+
+若要组合多个模式（schema），可以使用 `oneOf`、`anyOf` 或 `allOf` 等 OpenAPI 关键字（[查看详情](https://swagger.io/docs/specification/data-models/oneof-anyof-allof-not/)）。
+
+```ts
+@ApiProperty({
+  oneOf: [{ $ref: getSchemaPath(Cat) }, { $ref: getSchemaPath(Dog) }],
+})
+pet: Cat | Dog
+```
+
+如果你想定义一个多态数组（即一个数组的成员可以是不同类型），则需要手动配置 `items` 属性来指定其类型：
+
+```ts
+import { getSchemaPath } from '@nestjs/swagger'
+
+type Pet = Cat | Dog
+
+@ApiProperty({
+  type: 'array',
+  items: {
+    oneOf: [
+      { $ref: getSchemaPath(Cat) },
+      { $ref: getSchemaPath(Dog) },
+    ],
+  },
+})
+pets: Pet[]
+```
+
+请注意，上例中的 `Cat` 和 `Dog` 模型都必须通过 `@ApiExtraModels()` 装饰器（在类级别应用）预先注册。
+
+## 模式名称与描述
+
+你可能已经注意到，生成的模式名称默认派生自其模型类的名称（例如，`CreateCatDto` 模型对应 `CreateCatDto` 模式）。如果想自定义模式名称，可以使用 `@ApiSchema()` 装饰器。
+
+示例：
+
+```ts
+@ApiSchema({ name: 'CreateCatRequest' })
+class CreateCatDto {}
+```
+
+这样，该模型对应的模式名称就会变为 `CreateCatRequest`。
+
+默认情况下，生成的模式不包含描述。你可以通过 `description` 属性为其添加描述：
+
+```ts
+@ApiSchema({ description: '用于创建一只猫咪的数据传输对象' })
+class CreateCatDto {}
+```
+
+这样，模式中就会包含这段描述，效果如下：
+
+```yaml
+schemas:
+  CreateCatDto:
+    type: object
+    description: 用于创建一只新猫的数据传输对象
+```
+
+[cli-plugin]: /openapi/cli-plugin

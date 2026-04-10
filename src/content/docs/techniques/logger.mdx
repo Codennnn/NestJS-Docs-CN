@@ -1,0 +1,392 @@
+import { CheckCircle2Icon, XCircleIcon } from 'lucide-react'
+
+# 日志记录器
+
+Nest 内置了一个基于文本的日志记录器（`Logger` 类，位于 `@nestjs/common` 包中），用于在应用启动和运行过程中输出系统日志，例如异常捕获、调试信息等。你可以灵活控制日志系统的行为，常见的用法包括：
+
+- 关闭日志输出
+- 指定日志级别（仅显示错误、警告、调试信息等）
+- 配置日志格式（如原始文本、JSON、彩色输出等）
+- 自定义时间戳格式（如使用 ISO 8601）
+- 替换默认日志记录器，或通过继承方式扩展其行为
+- 结合依赖注入，提高日志系统在测试与模块化场景下的灵活性
+
+Nest 提供了默认的日志工具，也支持你引入第三方日志库进行增强。例如，性能优异且功能丰富的 [Pino](https://github.com/pinojs/pino) 是当前社区广泛采用的日志解决方案之一，常用于文件输出、日志聚合或远程集中式日志服务的接入。
+
+## 基础配置
+
+在调用 `NestFactory.create()` 创建应用实例时，可以通过配置 `logger` 选项来自定义日志行为。
+
+### 关闭日志：
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  logger: false,
+})
+```
+
+### 仅启用部分日志级别：
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  logger: ['error', 'warn'],
+})
+```
+
+可选的日志级别包括：`'log'`、`'fatal'`、`'error'`、`'warn'`、`'debug'`、`'verbose'`。你可以按需组合使用。
+
+### 禁用彩色输出：
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  logger: new ConsoleLogger({
+    colors: false,
+  }),
+})
+```
+
+### 设置日志前缀：
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  logger: new ConsoleLogger({
+    prefix: 'MyApp', // 默认为 `Nest`
+  }),
+})
+```
+
+## `ConsoleLogger` 选项详解
+
+以下为 `ConsoleLogger` 支持的所有配置项：
+
+| 选项              | 描述                                                                           | 默认值                                                         | 支持 JSON 模式                                                                          |
+| ----------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `logLevels`       | 要启用的日志级别数组。                                                         | `['log', 'fatal', 'error', `<br/>`'warn', 'debug', 'verbose']` | <CheckCircle2Icon aria-label="支持" className="inline-block size-4 text-emerald-500" /> |
+| `timestamp`       | 是否显示每条日志与上一条日志的时间间隔。                                       | `false`                                                        | <XCircleIcon aria-label="不支持" className="inline-block size-4 text-rose-500" />       |
+| `prefix`          | 日志消息的前缀文本。                                                           | `'Nest'`                                                       | <XCircleIcon aria-label="不支持" className="inline-block size-4 text-rose-500" />       |
+| `json`            | 是否以 JSON 格式输出日志。                                                     | `false`                                                        | <CheckCircle2Icon aria-label="支持" className="inline-block size-4 text-emerald-500" /> |
+| `colors`          | 是否启用彩色输出。非 JSON 模式默认为 `true`，JSON 模式默认为 `false`。         | `true`                                                         | <CheckCircle2Icon aria-label="支持" className="inline-block size-4 text-emerald-500" /> |
+| `context`         | 日志的上下文标签，用于标识日志来源。                                           | `undefined`                                                    | <CheckCircle2Icon aria-label="支持" className="inline-block size-4 text-emerald-500" /> |
+| `compact`         | 是否压缩日志为单行输出。设为数字时表示每行最多合并的属性数量。                 | `true`                                                         | <CheckCircle2Icon aria-label="支持" className="inline-block size-4 text-emerald-500" /> |
+| `maxArrayLength`  | 数组和集合类型对象显示的最大元素数量。设为 `null` 或 `Infinity` 显示全部元素。 | `100`                                                          | <XCircleIcon aria-label="不支持" className="inline-block size-4 text-rose-500" />       |
+| `maxStringLength` | 字符串的最大显示长度，超出部分将被截断。                                       | `10000`                                                        | <XCircleIcon aria-label="不支持" className="inline-block size-4 text-rose-500" />       |
+| `sorted`          | 是否对对象键进行排序，也可提供自定义排序函数。                                 | `false`                                                        | <XCircleIcon aria-label="不支持" className="inline-block size-4 text-rose-500" />       |
+| `depth`           | 对象格式化的最大递归深度。设为 `null` 或 `Infinity` 可遍历所有层级。           | `5`                                                            | <XCircleIcon aria-label="不支持" className="inline-block size-4 text-rose-500" />       |
+| `showHidden`      | 是否显示对象的不可枚举属性、符号属性等隐藏内容。                               | `false`                                                        | <CheckCircle2Icon aria-label="支持" className="inline-block size-4 text-emerald-500" /> |
+| `breakLength`     | 日志内容的换行阈值。超过此长度将拆分为多行，设为 `Infinity` 强制单行输出。     | `Infinity`                                                     | <XCircleIcon aria-label="不支持" className="inline-block size-4 text-rose-500" />       |
+
+## JSON 日志记录
+
+在现代应用开发中，采用 JSON 格式输出日志有助于提升可观测性，并便于与各类日志管理系统集成。在 NestJS 中，启用 JSON 日志记录非常简单：只需将 `ConsoleLogger` 的 `json` 选项设置为 `true`，然后将该实例作为应用的 `logger` 传入。
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  logger: new ConsoleLogger({
+    json: true,
+  }),
+})
+```
+
+启用后，所有日志将以结构化的 JSON 格式输出，适配日志聚合器、云平台等外部系统。例如，AWS ECS（Elastic Container Service，弹性容器服务）等平台原生支持 JSON 日志格式，可实现如下功能：
+
+- **日志过滤**：支持按日志等级、时间戳、自定义元数据等字段进行精准筛选。
+- **搜索与分析**：结合日志查询工具，便于追踪应用行为、识别趋势与异常。
+
+如果你使用 [NestJS Mau](https://mau.nestjs.com)，启用 JSON 日志后，还可以在界面中以结构化方式查看日志，更直观地进行调试和性能分析。
+
+<CalloutInfo>
+  设置 `json: true` 后，`ConsoleLogger` 会自动禁用文本着色（即将 `colors` 设为
+  `false`），确保输出为合法的 JSON 格式，不包含 ANSI
+  控制字符。在开发环境中，你也可以手动将 `colors` 设为
+  `true`，以便在本地终端中更清晰地阅读带颜色的日志。
+</CalloutInfo>
+
+以下是启用 JSON 日志记录后的输出示例：
+
+```json
+{
+  "level": "log",
+  "pid": 19096,
+  "timestamp": 1607370779834,
+  "message": "Starting Nest application...",
+  "context": "NestFactory"
+}
+```
+
+如需了解更多日志格式示例，可参考此 [Pull Request](https://github.com/nestjs/nest/pull/14121)。
+
+## 在应用中使用日志记录器
+
+通过前文介绍的配置方法，我们可以确保 Nest 的系统日志与应用中的自定义日志在格式和行为上保持一致，从而提升整体日志的可读性和一致性。
+
+在实际开发中，推荐在每个服务（Service）中使用 `@nestjs/common` 包提供的 `Logger` 类来记录日志。通过在构造函数中传入服务名称作为日志上下文，可以更好地标识日志来源。示例如下：
+
+```ts
+import { Logger, Injectable } from '@nestjs/common'
+
+@Injectable()
+class MyService {
+  private readonly logger = new Logger(MyService.name)
+
+  doSomething() {
+    this.logger.log('正在执行某些操作...')
+  }
+}
+```
+
+默认情况下，`Logger` 会在日志输出中使用方括号来标记上下文信息，输出格式如下：
+
+```bash
+[Nest] 19096   - 12/08/2019, 7:12:59 AM   [NestFactory] Starting Nest application...
+```
+
+当你通过 `app.useLogger()` 注册自定义日志记录器后，Nest 会自动使用该自定义实现来处理所有日志输出。这种设计实现了日志逻辑与具体实现的解耦，只需一次调用 `app.useLogger()` 即可全局替换日志行为。
+
+例如，当你按以下方式注册自定义日志记录器时：
+
+```ts
+app.useLogger(app.get(MyLogger))
+```
+
+之后在任何服务中调用 `this.logger.log()`，实际执行的将是 `MyLogger` 实例中的 `log` 方法。这种方式足以覆盖绝大多数使用场景。
+
+如需实现更高级的自定义功能（如新增方法等），请继续阅读下一节。
+
+## 为日志添加时间戳
+
+如果希望在日志输出中附带时间戳，可在创建 `Logger` 实例时，传入可选配置 `{ timestamp: true }`：
+
+```ts
+import { Logger, Injectable } from '@nestjs/common'
+
+@Injectable()
+class MyService {
+  private readonly logger = new Logger(MyService.name, { timestamp: true })
+
+  doSomething() {
+    this.logger.log('开始执行带时间戳的操作')
+  }
+}
+```
+
+生成的日志将包含时间戳信息，输出如下：
+
+```bash
+[Nest] 19096   - 04/19/2024, 7:12:59 AM   [MyService] Doing something with timestamp here +5ms
+```
+
+注意，日志末尾的 `+5ms` 表示与上一条日志消息之间的时间差。每次输出日志时，系统会自动计算与上一次记录的时间间隔。
+
+## 自定义日志记录器
+
+你可以通过为 `logger` 属性传入实现了 `LoggerService` 接口的对象，来为 Nest 应用提供自定义的日志记录器。
+
+最简单的方式是直接使用全局的 JavaScript `console` 对象，因为它本身就符合 `LoggerService` 接口的要求：
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  logger: console,
+})
+```
+
+当然，你也可以实现一个完全自定义的日志记录器。只需创建一个类并实现 `LoggerService` 接口中的各个方法即可：
+
+```ts
+import { LoggerService, Injectable } from '@nestjs/common'
+
+@Injectable()
+export class MyLogger implements LoggerService {
+  /**
+   * 写入 log 级别日志。
+   */
+  log(message: any, ...optionalParams: any[]) {}
+
+  /**
+   * 写入 fatal 级别日志。
+   */
+  fatal(message: any, ...optionalParams: any[]) {}
+
+  /**
+   * 写入 error 级别日志。
+   */
+  error(message: any, ...optionalParams: any[]) {}
+
+  /**
+   * 写入 warn 级别日志。
+   */
+  warn(message: any, ...optionalParams: any[]) {}
+
+  /**
+   * 写入 debug 级别日志。
+   */
+  debug?(message: any, ...optionalParams: any[]) {}
+
+  /**
+   * 写入 verbose 级别日志。
+   */
+  verbose?(message: any, ...optionalParams: any[]) {}
+}
+```
+
+然后将自定义日志记录器实例传入 `NestFactory.create()` 的配置中：
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  logger: new MyLogger(),
+})
+await app.listen(process.env.PORT ?? 3000)
+```
+
+虽然这种方式简单直接，但由于不支持依赖注入，在测试环境中替换或复用日志记录器实例会比较困难。为了获得更好的灵活性，推荐使用依赖注入的方式，具体实现请参考下文的[依赖注入](#依赖注入)部分。
+
+## 扩展内置日志记录器
+
+在大多数情况下，你无需从零开始实现日志记录器。通过继承内置的 `ConsoleLogger` 类并重写特定方法，即可轻松自定义日志行为：
+
+```ts
+import { ConsoleLogger } from '@nestjs/common'
+
+export class MyLogger extends ConsoleLogger {
+  error(message: any, stack?: string, context?: string) {
+    // 添加自定义处理逻辑
+    super.error(...arguments)
+  }
+}
+```
+
+这个扩展类可以在功能模块中直接使用，具体用法详见下方[依赖注入](#依赖注入)部分。
+
+你还可以将扩展后的日志记录器实例传递给 `logger` 配置项，或者通过依赖注入机制让 Nest 在系统级别使用它，相关实现方式请参考[自定义日志记录器](#自定义日志记录器)和[依赖注入](#依赖注入)章节。
+
+## 依赖注入
+
+如果你希望构建更灵活、功能更强大的日志系统，建议充分利用 Nest 的依赖注入机制。例如，你可以将 `ConfigService` 注入到自定义日志记录器中实现动态配置，然后将该日志记录器注入到其他控制器或提供者中进行统一使用。
+
+要让自定义日志记录器支持依赖注入，需要实现 `LoggerService` 接口并将其注册为模块的提供者。具体步骤如下：
+
+1. 创建一个 `MyLogger` 类，可以继承内置的 `ConsoleLogger`，也可以完全自定义（参考[前文示例](#扩展内置日志记录器)）。请确保该类实现了 `LoggerService` 接口。
+2. 创建一个 `LoggerModule` 并在其中注册 `MyLogger`：
+
+```ts
+import { Module } from '@nestjs/common'
+import { MyLogger } from './my-logger.service'
+
+@Module({
+  providers: [MyLogger],
+  exports: [MyLogger],
+})
+export class LoggerModule {}
+```
+
+通过以上方式，`MyLogger` 成为模块级提供者，可以被其他模块注入使用。由于它处于模块上下文中，因此可以注入其他依赖（如 `ConfigService`）来实现更复杂的日志逻辑。
+
+### 在全局启用自定义日志记录器
+
+如果你希望让 Nest 在应用引导过程和系统级日志中也使用自定义日志记录器，需要进行额外配置。
+
+由于 `NestFactory.create()` 在模块体系之外调用，此时依赖注入尚未建立，因此必须确保 `LoggerModule` 被某个应用模块导入，这样 Nest 才能正确实例化 `MyLogger` 的单例。
+
+随后，你可以通过以下方式将该单例日志记录器传递给应用：
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  bufferLogs: true,
+})
+
+app.useLogger(app.get(MyLogger))
+```
+
+<CalloutInfo>
+  此处设置 `bufferLogs: true`，可以确保在 `MyLogger`
+  挂载完成之前的日志不会丢失，系统会先行缓冲日志信息，直到应用初始化完成或失败。如果初始化失败，Nest
+  会自动回退到默认的 `ConsoleLogger` 输出错误日志。此外，还可以设置
+  `autoFlushLogs: false`（默认值为 `true`），以手动控制日志刷新时机（调用
+  `Logger.flush()`）。
+</CalloutInfo>
+
+这里通过 `app.get(MyLogger)` 获取自定义日志记录器的单例，这种方式相当于将其从依赖注入容器中「取出」，并交由 Nest 作为全局日志记录器使用，前提是 `MyLogger` 已被某个模块正确注册。
+
+此外，在控制器、服务或守卫等类中，你也可以像注入普通依赖一样注入 `MyLogger`，从而确保系统日志与应用日志统一使用同一个记录器实例。
+
+更多详细信息，请参见：[应用日志记录的用法](#)和[自定义日志记录器的注入](#注入自定义日志记录器)。
+
+## 注入自定义日志记录器
+
+你可以通过扩展 Nest 内置的日志记录器来实现自定义日志功能。
+
+以下有一个示例，在这个示例中，我们继承了 `ConsoleLogger` 并为其配置了[瞬态作用域](/fundamentals/injection-scopes)（Transient Scope），确保每个功能模块（feature module）都会获得一个独立的 `MyLogger` 实例。虽然这个例子中我们没有重写 `log()`、`warn()` 等方法，但你可以根据实际需求进行扩展。
+
+```ts
+import { Injectable, Scope, ConsoleLogger } from '@nestjs/common'
+
+@Injectable({ scope: Scope.TRANSIENT })
+export class MyLogger extends ConsoleLogger {
+  customLog() {
+    this.log('记得给猫咪喂食哦！')
+  }
+}
+```
+
+接下来，定义一个 `LoggerModule` 并导出该自定义日志记录器：
+
+```ts
+import { Module } from '@nestjs/common'
+import { MyLogger } from './my-logger.service'
+
+@Module({
+  providers: [MyLogger],
+  exports: [MyLogger],
+})
+export class LoggerModule {}
+```
+
+然后，在需要日志功能的特性模块中导入 `LoggerModule`，即可使用自定义的 `MyLogger`。由于我们继承自 `ConsoleLogger`，因此可以调用其内置方法，如 `setContext()` 来设置日志上下文：
+
+```ts
+import { Injectable } from '@nestjs/common'
+import { MyLogger } from './my-logger.service'
+
+@Injectable()
+export class CatsService {
+  private readonly cats: Cat[] = []
+
+  constructor(private readonly myLogger: MyLogger) {
+    // 由于使用了瞬态作用域，每个服务实例都有独立的 MyLogger，不会相互干扰
+    this.myLogger.setContext('CatsService')
+  }
+
+  findAll(): Cat[] {
+    // 使用内置方法记录日志
+    this.myLogger.warn('准备返回所有猫咪信息！')
+    // 调用自定义方法
+    this.myLogger.customLog() // 会打印：记得给猫咪喂食哦！
+
+    return this.cats
+  }
+}
+```
+
+最后，在 `main.ts` 中，你可以显式指定应用使用自定义日志记录器实例。需要注意的是：在本例中，由于我们没有重写日志方法，因此调用 `useLogger()` 并非必需。但是，如果你在日志方法中添加了自定义逻辑，并希望 Nest 核心框架也采用这些定制行为，则需要进行如下配置：
+
+```ts filename='main.ts'
+const app = await NestFactory.create(AppModule, {
+  bufferLogs: true,
+})
+
+app.useLogger(new MyLogger())
+```
+
+<CalloutInfo title="可选提示">
+  除了使用 `bufferLogs: true` 外，你还可以通过设置 `logger: false` 来临时禁用日志记录器。但需要注意：如果设置了 `logger: false`，那么在调用 `useLogger()` 之前，所有日志都会被静默丢弃，这可能导致错过关键的初始化错误信息。
+
+如果你不介意在启动阶段仍由默认日志记录器输出部分信息，也可以省略 `logger: false` 配置。
+
+</CalloutInfo>
+
+## 使用第三方日志记录器
+
+在生产环境中，应用通常需要更强大的日志功能，例如多级过滤、结构化日志、日志轮转或集中化采集等。
+
+Nest 提供的内置日志记录器主要用于框架内部日志以及开发阶段的基础调试。若需要更丰富的日志能力，建议集成成熟的第三方日志库，例如 [Winston](https://github.com/winstonjs/winston)。
+
+Nest 完全兼容标准 Node.js 日志生态，因此你可以像在任何 Node.js 应用中一样，灵活地接入这些日志方案，提升日志系统的可控性与可观测性。

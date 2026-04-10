@@ -1,0 +1,13 @@
+# 跨平台无关性
+
+Nest 是一个**平台无关**（platform-agnostic）的框架，致力于帮助开发者构建高度可复用的逻辑模块，从而轻松应对多种应用场景。通过 Nest 编写的大部分组件通常无需修改，就能在不同底层 HTTP 平台（Express / Fastify）之间切换；同样，也适用于多种传输层协议，包括传统的 HTTP 服务、微服务架构，甚至基于 WebSocket 的实时通信应用。
+
+## 一次构建，多处复用
+
+本指南前文主要围绕基于 HTTP 的服务开发，例如构建 RESTful API 或实现 MVC 风格的服务端渲染。但实际上，这些模块都是传输层无关的，完全可以应用于[微服务](/microservices/basics)、[WebSocket 网关](/websockets/gateways)等不同通信机制之上。
+
+Nest 还提供了专门的 GraphQL 模块，可作为 API 层的替代方案，与 RESTful API 并存或互换使用，增强了架构的灵活性。
+
+此外，通过[应用上下文](/standalone-applications)功能，你可以脱离传统 HTTP 请求上下文，构建 CLI 工具、定时任务等**非 Web 场景下的 Node.js 应用**。
+
+Nest 致力于成为 Node.js 生态下的**全场景应用平台**，让你以统一的方式构建高内聚、强解耦的模块，从而真正实现「一次构建，多处复用」。

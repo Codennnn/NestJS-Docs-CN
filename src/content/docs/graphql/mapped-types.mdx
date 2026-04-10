@@ -1,0 +1,168 @@
+# 映射类型（Mapped types）
+
+<CalloutInfo type="warning">
+
+本章节仅适用于代码优先（code first）方式。
+
+</CalloutInfo>
+
+在开发诸如 CRUD（创建/读取/更新/删除）等功能时，通常需要基于某个基础实体类型构建不同的变体。Nest 提供了若干实用函数，用于类型转换，使这一过程更加便捷。
+
+## 可选类型（Partial）
+
+在构建输入校验类型（通常称为数据传输对象（Data Transfer Object，DTO））时，通常需要基于同一个类型创建**创建**和**更新**两种变体。例如，**创建**变体可能要求所有字段都是必填的，而**更新**变体则可能希望所有字段都是可选的。
+
+Nest 提供了 `PartialType()` 工具函数，帮助你更轻松地完成这一任务，并减少模板代码（Boilerplate）。
+
+`PartialType()` 函数会返回一个类型（类），其所有属性都变为可选。例如，假设我们有如下的**创建**类型：
+
+```ts
+@InputType()
+class CreateUserInput {
+  @Field()
+  email: string
+
+  @Field()
+  password: string
+
+  @Field()
+  firstName: string
+}
+```
+
+默认情况下，这些字段都是必填的。若要创建一个拥有相同字段但全部为可选的类型，可以使用 `PartialType()`，并将类引用（`CreateUserInput`）作为参数传入：
+
+```ts
+@InputType()
+export class UpdateUserInput extends PartialType(CreateUserInput) {}
+```
+
+<CalloutInfo>
+
+`PartialType()` 函数需从 `@nestjs/graphql` 包中导入。
+
+</CalloutInfo>
+
+`PartialType()` 函数还可以接收一个可选的第二个参数，该参数是一个装饰器工厂的引用。通过该参数可以更改应用于结果（子）类的装饰器函数。如果未指定，子类实际上会使用与父类（第一个参数引用的类）相同的装饰器。在上面的例子中，我们继承了带有 `@InputType()` 装饰器的 `CreateUserInput`。由于我们希望 `UpdateUserInput` 也被视为带有 `@InputType()` 装饰器的类型，因此无需将 `InputType` 作为第二个参数传入。如果父类型和子类型的装饰器不同（例如父类使用 `@ObjectType`），则需要将 `InputType` 作为第二个参数传入。例如：
+
+```ts
+@InputType()
+export class UpdateUserInput extends PartialType(User, InputType) {}
+```
+
+## 选择类型（Pick）
+
+`PickType()` 工具函数可以通过从输入类型中挑选一组属性，构造出一个新的类型（类）。例如，假设我们有如下类型：
+
+```ts
+@InputType()
+class CreateUserInput {
+  @Field()
+  email: string
+
+  @Field()
+  password: string
+
+  @Field()
+  firstName: string
+}
+```
+
+我们可以使用 `PickType()` 工具函数，从该类中挑选部分属性，生成一个新类型：
+
+```ts
+@InputType()
+export class UpdateEmailInput extends PickType(CreateUserInput, [
+  'email',
+] as const) {}
+```
+
+<CalloutInfo>
+
+`PickType()` 工具函数需从 `@nestjs/graphql` 包中导入。
+
+</CalloutInfo>
+
+## 忽略类型（Omit）
+
+`OmitType()` 函数用于基于输入类型，移除指定属性后，构造出一个新的类型。例如，假设我们有如下类型：
+
+```ts
+@InputType()
+class CreateUserInput {
+  @Field()
+  email: string
+
+  @Field()
+  password: string
+
+  @Field()
+  firstName: string
+}
+```
+
+我们可以通过如下方式，生成一个派生类型，该类型包含除了 `email` 以外的所有属性。在这个用法中，`OmitType` 的第二个参数是属性名数组。
+
+```ts
+@InputType()
+export class UpdateUserInput extends OmitType(CreateUserInput, [
+  'email',
+] as const) {}
+```
+
+<CalloutInfo>
+
+`OmitType()` 函数需从 `@nestjs/graphql` 包中导入。
+
+</CalloutInfo>
+
+## 交集类型（Intersection）
+
+`IntersectionType()` 函数可以将两个类型（类）合并为一个新的类型。例如，假设我们有如下两个类型：
+
+```ts
+@InputType()
+class CreateUserInput {
+  @Field()
+  email: string
+
+  @Field()
+  password: string
+}
+
+@ObjectType()
+export class AdditionalUserInfo {
+  @Field()
+  firstName: string
+
+  @Field()
+  lastName: string
+}
+```
+
+我们可以生成一个新类型，将两个类型中的所有属性合并到一起。
+
+```ts
+@InputType()
+export class UpdateUserInput extends IntersectionType(
+  CreateUserInput,
+  AdditionalUserInfo
+) {}
+```
+
+<CalloutInfo>
+
+`IntersectionType()` 函数从 `@nestjs/graphql` 包中导入。
+
+</CalloutInfo>
+
+## 组合类型（Composition）
+
+类型映射工具函数是可以组合使用的。例如，下面的写法会生成一个类型（类），它包含 `CreateUserInput` 类型中除 `email` 之外的所有属性，并且这些属性都变为可选：
+
+```ts
+@InputType()
+export class UpdateUserInput extends PartialType(
+  OmitType(CreateUserInput, ['email'] as const)
+) {}
+```

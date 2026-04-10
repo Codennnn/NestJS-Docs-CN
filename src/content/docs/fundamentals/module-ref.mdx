@@ -1,0 +1,157 @@
+# 模块引用
+
+Nest 提供了一个名为 `ModuleRef` 的类，用于在应用内部的依赖注入上下文中进行导航。通过 `ModuleRef`，我们可以根据注入令牌（Injection Token）检索到任意已注册的提供者实例。除了获取现有实例之外，它还支持在运行时动态创建静态或具有作用域的提供者（Scoped Providers）。
+
+要使用 `ModuleRef`，只需像注入其他依赖一样，将其注入到类中，便可方便地调用相关方法：
+
+```ts filename='cats.service.ts'
+import { ModuleRef } from '@nestjs/core'
+
+@Injectable()
+export class CatsService {
+  constructor(private moduleRef: ModuleRef) {}
+}
+```
+
+## 获取实例
+
+`ModuleRef`（下文称为「模块引用」）提供了一个名为 `get()` 的方法，可用于根据类或注入令牌，从当前模块中检索已注册且已实例化的依赖对象，这些对象包括提供者、控制器，以及守卫、拦截器等所有可注入组件。
+
+需要注意的是，如果未能找到对应的实例，`get()` 方法将会抛出异常。
+
+```ts filename='cats.service.ts'
+@Injectable()
+export class CatsService implements OnModuleInit {
+  private service: Service
+
+  constructor(private moduleRef: ModuleRef) {}
+
+  onModuleInit() {
+    this.service = this.moduleRef.get(Service)
+  }
+}
+```
+
+<CalloutInfo type="warning">
+  `get()`
+  方法**无法解析作用域提供者**（如瞬态或请求作用域的依赖）。如果需要访问这类提供者，请参考下文的[解析作用域提供者](#动态解析作用域提供者)部分。关于依赖作用域的完整说明，请参阅[依赖注入作用域](/fundamentals/injection-scopes)。
+</CalloutInfo>
+
+在某些情况下，你可能希望从**全局上下文**中解析一个定义在其他模块的提供者。此时，可以通过传入 `{ strict: false }` 选项关闭严格模式，从而允许跨模块检索：
+
+```ts
+this.moduleRef.get(Service, { strict: false })
+```
+
+## 动态解析作用域提供者
+
+在某些场景中，你可能需要手动解析具有作用域的提供者，例如瞬态（Transient）或请求（Request）作用域的服务。此时，可以使用 `ModuleRef` 提供的 `resolve()` 方法，并传入目标提供者的注入令牌：
+
+```ts filename='cats.service.ts'
+@Injectable()
+export class CatsService implements OnModuleInit {
+  private transientService: TransientService
+
+  constructor(private moduleRef: ModuleRef) {}
+
+  async onModuleInit() {
+    this.transientService = await this.moduleRef.resolve(TransientService)
+  }
+}
+```
+
+`resolve()` 方法会返回该提供者在其专属依赖注入子树（subtree）中的唯一实例。由于每个依赖子树都拥有独立的上下文标识符（context ID），因此多次调用 `resolve()` 将返回不同的实例：
+
+```ts filename='cats.service.ts'
+@Injectable()
+export class CatsService implements OnModuleInit {
+  constructor(private moduleRef: ModuleRef) {}
+
+  async onModuleInit() {
+    const [transientService1, transientService2] = await Promise.all([
+      this.moduleRef.resolve(TransientService),
+      this.moduleRef.resolve(TransientService),
+    ])
+
+    console.log(transientService1 === transientService2) // false
+  }
+}
+```
+
+如果希望多次解析时返回同一个实例（即复用相同的依赖注入上下文），可以为 `resolve()` 提供一个显式的上下文标识符。你可以通过 `ContextIdFactory.create()` 方法创建一个新的上下文 ID：
+
+```ts filename='cats.service.ts'
+import { ContextIdFactory } from '@nestjs/core'
+
+@Injectable()
+export class CatsService implements OnModuleInit {
+  constructor(private moduleRef: ModuleRef) {}
+
+  async onModuleInit() {
+    const contextId = ContextIdFactory.create()
+
+    const [transientService1, transientService2] = await Promise.all([
+      this.moduleRef.resolve(TransientService, contextId),
+      this.moduleRef.resolve(TransientService, contextId),
+    ])
+
+    console.log(transientService1 === transientService2) // true
+  }
+}
+```
+
+## 手动注册 `REQUEST` 提供者
+
+当你使用 `ContextIdFactory.create()` 手动生成上下文 ID 时，Nest 默认不会将 `REQUEST` 提供者注入到该上下文对应的依赖注入子树中，因此你将无法直接注入 `REQUEST` 对象，其值也会是 `undefined`。这是因为此类上下文并非由 Nest 的请求生命周期自动创建，框架也就不会主动为其绑定请求相关信息。
+
+如果你需要在这种手动创建的上下文中使用 `REQUEST` 提供者，可以通过调用 `ModuleRef#registerRequestByContextId()` 方法，显式注册一个自定义的请求对象：
+
+```ts
+const contextId = ContextIdFactory.create()
+this.moduleRef.registerRequestByContextId(/* YOUR_REQUEST_OBJECT */, contextId)
+```
+
+## 获取当前请求的上下文
+
+在某些情况下，你可能需要在一个请求作用域的服务中，解析另一个同样属于请求作用域的提供者实例。以 `CatsService` 为例，假设它本身是请求作用域的服务，而你希望在其中注入同样为请求作用域的 `CatsRepository`。
+
+要确保它们共享同一个依赖注入上下文，**不能重新创建上下文标识符**，而应使用当前请求对应的上下文 ID。
+
+为此，你可以注入原始的请求对象（例如 HTTP 请求或 RPC 请求），并通过它获取上下文标识符：
+
+```ts filename='cats.service.ts'
+@Injectable()
+export class CatsService {
+  constructor(@Inject(REQUEST) private request: Record<string, unknown>) {}
+}
+```
+
+<CalloutInfo>
+  有关请求作用域提供者的更多信息，详见[请求作用域提供者](/fundamentals/injection-scopes#注入原始请求对象)章节。
+</CalloutInfo>
+
+然后，你可以使用 `ContextIdFactory.getByRequest()` 方法，根据请求对象获取对应的上下文标识符，并将其传入 `moduleRef.resolve()` 方法，解析出当前请求上下文下的其他依赖：
+
+```ts
+const contextId = ContextIdFactory.getByRequest(this.request)
+const catsRepository = await this.moduleRef.resolve(CatsRepository, contextId)
+```
+
+## 动态实例化自定义类
+
+有时你可能需要按需创建某个类的实例，但又不希望将其事先注册为 Nest 的提供者。这种场景下，可以借助 `ModuleRef` 提供的 `create()` 方法实现：
+
+```ts filename='cats.service.ts'
+@Injectable()
+export class CatsService implements OnModuleInit {
+  private catsFactory: CatsFactory
+
+  constructor(private moduleRef: ModuleRef) {}
+
+  async onModuleInit() {
+    this.catsFactory = await this.moduleRef.create(CatsFactory)
+  }
+}
+```
+
+通过这种方式，Nest 会使用其内置的依赖注入容器来**动态构造该类的实例**，包括自动注入其构造函数所需的依赖 —— 即便该类本身并未作为提供者注册到模块中。

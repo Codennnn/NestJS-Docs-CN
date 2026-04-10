@@ -1,0 +1,61 @@
+# 服务端推送事件
+
+服务端推送事件（Server-Sent Events，简称 SSE）是一种轻量级的 server push 技术。它基于**单向 HTTP 长连接**，让客户端在同一个请求上持续接收服务器的实时更新。
+
+- **工作方式**：服务器将数据按文本流（text/event-stream）连续发送；每条事件以**两个换行符**结尾，用于分隔消息边界。
+- **适用场景**：股票行情、聊天通知、实时监控等需要**单向**、**实时**传输但对连接数要求不高的场合。
+
+更多细节可参考 [MDN Server-Sent Events 文档](https://developer.mozilla.org/zh-CN/docs/Web/API/Server-sent_events)。
+
+## 用法
+
+在 NestJS 中，要为某个控制器路由启用**服务端推送事件**，只需为对应的方法添加 `@Sse()` 装饰器：
+
+```ts
+import { Sse } from '@nestjs/common'
+import { Observable, interval, map } from 'rxjs'
+
+@Sse('sse')
+sse(): Observable<MessageEvent> {
+  return interval(1000).pipe(
+    map(() => ({ data: { hello: 'world' } }))
+  )
+}
+```
+
+<CalloutInfo type="warning">
+  服务端推送的路由必须返回一个**可观察对象（Observable）流**。
+</CalloutInfo>
+
+在上述示例中，我们创建了一个名为 `/sse` 的路由，用于向客户端周期性地推送数据。方法返回一个 `Observable`，每秒发出一个事件，事件的内容包含一个简单的 JSON 对象 `{ hello: 'world' }`。
+
+Nest 会将每个由 `Observable` 发出的值包装为 `MessageEvent` 并以符合 SSE 协议的格式推送给客户端。该事件对象应符合以下接口规范：
+
+```ts
+export interface MessageEvent {
+  data: string | object
+  id?: string
+  type?: string
+  retry?: number
+}
+```
+
+### 客户端接收事件
+
+在客户端，可通过 [EventSource API](https://developer.mozilla.org/zh-CN/docs/Web/API/EventSource) 接收来自服务器的推送事件。以下是一个简单示例：
+
+```js
+const eventSource = new EventSource('/sse')
+
+eventSource.onmessage = ({ data }) => {
+  console.log('新消息：', JSON.parse(data))
+}
+```
+
+一旦实例化，`EventSource` 会与服务器建立一个持久的 HTTP 连接，并自动以 `text/event-stream` 格式持续接收数据。该连接会保持直到显式调用 `eventSource.close()` 进行关闭。
+
+当服务器推送的事件包含 `event` 字段时，会触发与该字段值对应的事件类型；否则默认触发 `message` 事件。更多细节可参考 [MDN 上的 EventSource 文档](https://developer.mozilla.org/zh-CN/docs/Web/API/EventSource)。
+
+## 示例
+
+你可以参考 Nest 官方仓库中的 [服务端推送示例](https://github.com/nestjs/nest/tree/master/sample/28-sse)，获取完整的实现代码和更多用法细节。

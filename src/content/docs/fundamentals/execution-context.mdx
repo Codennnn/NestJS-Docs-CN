@@ -1,0 +1,302 @@
+# 执行上下文
+
+Nest 提供了一套强大的工具类，旨在帮助开发者构建能够适配多种运行环境的通用程序，例如基于 Nest 的 HTTP 服务、微服务架构，或是 WebSocket 应用。这些工具类可以提取当前的执行上下文信息，使我们能够编写可在不同类型的控制器、处理器和运行平台之间灵活复用的守卫、异常过滤器和拦截器。
+
+本章将重点介绍两个核心类：`ArgumentsHost` 和 `ExecutionContext`，它们是构建高度抽象和可扩展逻辑的关键基础。
+
+## ArgumentsHost 类
+
+`ArgumentsHost` 是一个抽象层，用于统一访问处理器（handler）接收到的原始参数。它屏蔽了不同上下文（如 HTTP、RPC 或 WebSocket）下参数结构的差异，让你可以通过统一的方式获取所需数据。
+
+在需要访问请求上下文的场景中，Nest 会自动注入一个 `ArgumentsHost` 实例，通常命名为 `host`。例如，在[异常过滤器](/exception-filters#argumentshost-参数)的 `catch()` 方法中，就会收到一个 `ArgumentsHost` 实例作为参数。
+
+简而言之，`ArgumentsHost` 封装了对处理器参数的访问逻辑，让开发者无需关心底层平台的具体实现。例如：
+
+- 在 HTTP 应用中（如使用 `@nestjs/platform-express`），它封装了 Express 风格的参数数组 `[request, response, next]`。
+- 在 GraphQL 应用中，则封装了 GraphQL 专属参数结构 `[root, args, context, info]`。
+
+借助这种抽象机制，无论底层运行于何种平台，你都能通过一致的方式获取原始参数。
+
+## 判断当前应用上下文类型
+
+在编写需要同时适用于多种环境的通用逻辑组件（例如守卫、异常过滤器或拦截器）时，我们通常需要先确定当前的执行上下文类型。此时，可以通过 `ArgumentsHost` 提供的 `getType()` 方法来实现这一需求：
+
+```ts
+import { GqlContextType } from '@nestjs/graphql'
+
+if (host.getType() === 'http') {
+  // 针对 HTTP（REST）请求的处理逻辑
+} else if (host.getType() === 'rpc') {
+  // 针对微服务（RPC）调用的处理逻辑
+} else if (host.getType<GqlContextType>() === 'graphql') {
+  // 针对 GraphQL 请求的处理逻辑
+}
+```
+
+通过上下文类型判断机制，我们可以精确控制逻辑的适用范围，使组件在不同平台间具备良好的适应性。
+
+## 获取处理器参数
+
+要获取传递给处理器的参数数组，可以使用 `host` 对象的 `getArgs()` 方法：
+
+```ts
+const [req, res, next] = host.getArgs()
+```
+
+如果只需访问某个特定参数，也可以通过 `getArgByIndex()` 方法按索引获取：
+
+```ts
+const request = host.getArgByIndex(0)
+const response = host.getArgByIndex(1)
+```
+
+虽然通过索引访问参数是可行的，但这种方式会使代码强依赖于特定的执行上下文（如 HTTP、WebSocket 或 RPC），降低通用性与可维护性，因此并不推荐。
+
+更推荐的方式是使用 `host` 提供的上下文切换方法，明确切换至当前处理器所处的上下文类型。这类方法包括：
+
+```ts
+switchToHttp(): HttpArgumentsHost   // 切换到 HTTP 上下文
+switchToWs(): WsArgumentsHost       // 切换到 WebSocket 上下文
+switchToRpc(): RpcArgumentsHost     // 切换到 RPC（微服务）上下文
+```
+
+不同的传输层（如 HTTP、WebSocket、RPC）中，`ArgumentsHost` 提供了对应的适配器接口，可用于获取上下文相关的请求数据和底层框架对象。例如，在 HTTP 场景下，可以调用 `switchToHttp()` 获取一个 `HttpArgumentsHost` 实例，从中提取 Express 的请求与响应对象：
+
+```ts
+const ctx = host.switchToHttp()
+const request = ctx.getRequest<Request>()
+const response = ctx.getResponse<Response>()
+```
+
+如果当前上下文为 WebSocket，可以通过 `switchToWs()` 获取 `WsArgumentsHost`，用于访问客户端连接对象与传入数据：
+
+```ts
+export interface WsArgumentsHost {
+  /** 获取客户端传入的数据 */
+  getData<T>(): T
+
+  /** 获取客户端连接对象（如 Socket.IO 客户端） */
+  getClient<T>(): T
+}
+```
+
+在微服务场景中，调用 `switchToRpc()` 将返回 `RpcArgumentsHost`，可用于访问消息内容和上下文：
+
+```ts
+export interface RpcArgumentsHost {
+  /** 获取传入的数据对象 */
+  getData<T>(): T
+
+  /** 获取 RPC 上下文对象（如消息上下文） */
+  getContext<T>(): T
+}
+```
+
+<CalloutInfo>
+  应根据所使用的传输机制（HTTP、WebSocket 或
+  RPC）选择对应的上下文切换方法。每种上下文类型都提供了访问底层平台对象（如
+  Express、Socket.IO 或自定义传输器）的能力，有助于提升代码的可读性和稳定性。
+</CalloutInfo>
+
+## ExecutionContext 类
+
+`ExecutionContext` 是一个继承自 `ArgumentsHost` 的接口，在其基础上提供了更丰富的上下文信息，用于描述当前的请求处理流程。Nest 会在特定场景下自动注入 `ExecutionContext` 实例，例如在守卫的 `canActivate()` 方法中，或在[拦截器](/interceptors#执行上下文)的 `intercept()` 方法中。
+
+除了 `ArgumentsHost` 提供的通用参数访问能力，`ExecutionContext` 还扩展了以下两个关键方法：
+
+```ts
+export interface ExecutionContext extends ArgumentsHost {
+  /**
+   * 获取当前处理器所属的控制器类（类型）。
+   */
+  getClass<T>(): Type<T>
+
+  /**
+   * 获取即将被调用的处理器方法（函数引用）。
+   */
+  getHandler(): Function
+}
+```
+
+- `getHandler()`：返回当前处理请求的方法的函数引用。
+- `getClass()`：返回该方法所属的控制器类（注意是类的类型，而非其实例）。
+
+举例来说，在处理一个绑定到 `CatsController` 的 `create()` 方法的 `POST` 请求时：
+
+```ts
+const methodKey = ctx.getHandler().name // "create"
+const className = ctx.getClass().name // "CatsController"
+```
+
+通过这两个方法，我们可以同时获取当前控制器类和其方法的信息，从而具备更强的上下文感知能力。这在编写守卫或拦截器时尤为有用 —— 比如，你可以配合 `Reflector` 提供的 `get()` 方法，读取通过 `@SetMetadata()` 或自定义装饰器设置的元数据，实现更灵活的逻辑控制。相关用法将在后续章节中进一步讲解。
+
+## 反射与元数据
+
+Nest 提供了多种方式为路由处理器附加自定义元数据（Metadata），最常用的有两种：
+
+- 使用内置装饰器 `@SetMetadata()`。
+- 使用 `Reflector.createDecorator()` 创建类型安全的自定义装饰器。
+
+本节将对比这两种方式，并展示如何在守卫或拦截器中提取这些元数据。
+
+### 使用 `Reflector.createDecorator()` 创建强类型装饰器
+
+当你希望创建一个类型安全的装饰器时，可以使用 `Reflector.createDecorator()` 方法。比如，下面的示例定义了一个接收 `string[]` 类型参数的 `@Roles()` 装饰器：
+
+```ts filename='roles.decorator.ts'
+import { Reflector } from '@nestjs/core'
+
+export const Roles = Reflector.createDecorator<string[]>()
+```
+
+此时，`Roles` 是一个类型明确的装饰器函数，可以直接用于控制器的方法上：
+
+```ts filename='cats.controller.ts'
+@Post()
+@Roles(['admin'])
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto)
+}
+```
+
+上述代码中，我们将角色信息作为元数据附加在 `create()` 路由处理器上，表示该接口只允许角色为 `admin` 的用户访问。
+
+### 在运行时提取元数据
+
+若要在守卫、拦截器或其他上下文感知组件中访问这些元数据，可以使用 `Reflector` 工具类，它可以像普通服务一样被注入使用：
+
+```ts filename='roles.guard.ts'
+import { Reflector } from '@nestjs/core'
+
+@Injectable()
+export class RolesGuard {
+  constructor(private reflector: Reflector) {}
+}
+```
+
+要读取附加在处理器上的元数据，可以调用 `get()` 方法：
+
+```ts
+const roles = this.reflector.get(Roles, context.getHandler())
+```
+
+这里的第一个参数是装饰器的引用（即 `Roles`），第二个参数是目标上下文，通常是通过 `ExecutionContext.getHandler()` 获取的当前处理器函数。
+
+### 控制器级别的元数据
+
+除了方法级装饰器，你还可以将 `@Roles()` 应用于整个控制器，使元数据作用于控制器下的所有路由：
+
+```ts filename='cats.controller.ts'
+@Roles(['admin'])
+@Controller('cats')
+export class CatsController {}
+```
+
+此时，如需提取控制器的元数据，只需将目标上下文切换为类本身，即使用 `context.getClass()`：
+
+```ts filename='roles.guard.ts'
+const roles = this.reflector.get(Roles, context.getClass())
+```
+
+### 合并多个层级的元数据
+
+在实际项目中，可能会同时在控制器和处理器方法上设置 `@Roles()` 装饰器，例如：
+
+```ts filename='cats.controller.ts'
+@Roles(['user'])
+@Controller('cats')
+export class CatsController {
+  @Post()
+  @Roles(['admin'])
+  async create(@Body() createCatDto: CreateCatDto) {
+    this.catsService.create(createCatDto)
+  }
+}
+```
+
+此时，Nest 提供了两个实用方法，用于合并并提取不同层级的元数据：
+
+#### 方法一：`getAllAndOverride()`
+
+该方法从多个上下文中提取元数据，**优先使用靠前的值进行覆盖**。如果你希望方法上的 `@Roles()` 覆盖控制器上的默认值，可以这样写：
+
+```ts
+const roles = this.reflector.getAllAndOverride(Roles, [
+  context.getHandler(),
+  context.getClass(),
+])
+```
+
+在上例中，当守卫运行于 `create()` 方法时，返回的 `roles` 将是 `['admin']`。
+
+#### 方法二：`getAllAndMerge()`
+
+如果你希望**合并多个层级的元数据**（适用于数组、对象等），可以使用 `getAllAndMerge()`：
+
+```ts
+const roles = this.reflector.getAllAndMerge(Roles, [
+  context.getHandler(),
+  context.getClass(),
+])
+```
+
+该方法将返回合并结果，如 `['user', 'admin']`。
+
+### 小结
+
+无论是通过 `@SetMetadata()` 还是强类型的 `createDecorator()`，Nest 都允许你以灵活的方式设置和提取自定义元数据。而 `Reflector` 提供的 `get()`、`getAllAndOverride()`、`getAllAndMerge()` 方法，极大地简化了这些元数据在运行时的访问和处理。
+
+## 底层实现方式（Low-level Approach）
+
+如前所述，除了使用 `Reflector.createDecorator()` 创建自定义装饰器外，Nest 还提供了一个内置的装饰器 `@SetMetadata()`，可用于向处理器附加元数据。
+
+```ts filename='cats.controller.ts'
+import { SetMetadata } from '@nestjs/common'
+
+@Post()
+@SetMetadata('roles', ['admin'])
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto)
+}
+```
+
+在上述示例中，我们通过 `@SetMetadata()` 将名为 `roles` 的元数据附加到了 `create()` 方法上，其值为 `['admin']`。虽然这种方式确实可行，但并不推荐直接在路由处理器中使用 `@SetMetadata()`，原因在于其可读性较差，也不利于代码复用和维护。
+
+更好的实践是封装成一个自定义装饰器：
+
+```ts filename='roles.decorator.ts'
+import { SetMetadata } from '@nestjs/common'
+
+export const Roles = (...roles: string[]) => SetMetadata('roles', roles)
+```
+
+这种方式不仅语义更清晰、代码更简洁，也更接近使用 `Reflector.createDecorator()` 创建装饰器的风格。两者的主要区别在于：`@SetMetadata()` 允许你显式指定元数据的键和值，适合需要更高自由度的场景，例如接收多个参数。
+
+有了自定义装饰器后，我们就可以更优雅地为路由方法添加角色信息：
+
+```ts filename='cats.controller.ts'
+@Post()
+@Roles('admin')
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto)
+}
+```
+
+要在运行时获取这些元数据，依然可以借助 Nest 提供的 `Reflector` 辅助类：
+
+```ts filename='roles.guard.ts'
+import { Reflector } from '@nestjs/core'
+
+@Injectable()
+export class RolesGuard {
+  constructor(private reflector: Reflector) {}
+}
+```
+
+获取元数据的方式如下：
+
+```ts
+const roles = this.reflector.get<string[]>('roles', context.getHandler())
+```
+
+此方法接受两个参数：第一个是元数据的键（此处为 `'roles'`），第二个是目标处理器。整体用法与 `Reflector.createDecorator()` 创建的装饰器完全一致。

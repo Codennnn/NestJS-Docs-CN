@@ -1,0 +1,460 @@
+# 路由模块
+
+<CalloutInfo>本章内容仅适用于基于 HTTP 的应用。</CalloutInfo>
+
+在构建如 RESTful API 等基于 HTTP 的应用时，路由的完整路径由两部分组成：控制器上的 `@Controller()` 装饰器所定义的路径前缀（可选），以及方法装饰器（如 `@Get('users')`）中指定的路径。你可以在[控制器章节](/controllers#路由)了解更多详细内容。
+
+此外，Nest 还支持为整个应用配置[全局路由前缀](/faq/global-prefix)，或启用[路由版本控制](/techniques/versioning)功能。
+
+在某些场景下，我们希望为模块中所有控制器统一添加一个路径前缀。这在组织模块路由结构、保持命名一致性方面尤其有用。举例来说，假设你的应用中有一组服务于「仪表盘（Dashboard）」功能的端点。为了避免在每个相关控制器中手动添加 `/dashboard` 前缀，你可以使用 `RouterModule` 模块来统一配置，如下所示：
+
+```ts filename='app.module.ts'
+import { RouterModule } from '@nestjs/core'
+
+@Module({
+  imports: [
+    DashboardModule,
+    RouterModule.register([
+      {
+        path: 'dashboard',
+        module: DashboardModule,
+      },
+    ]),
+  ],
+})
+export class AppModule {}
+```
+
+`RouterModule` 还支持定义嵌套路由。这意味着你可以通过设置模块的 `children` 属性，将子模块注册到某个父模块下，并自动继承父模块的路径前缀。
+
+例如，下面的示例中，我们将 `AdminModule` 作为父模块，分别挂载了 `DashboardModule` 和 `MetricsModule` 作为其子模块：
+
+```ts
+@Module({
+  imports: [
+    AdminModule,
+    DashboardModule,
+    MetricsModule,
+    RouterModule.register([
+      {
+        path: 'admin',
+        module: AdminModule,
+        children: [
+          {
+            path: 'dashboard',
+            module: DashboardModule,
+          },
+          {
+            path: 'metrics',
+            module: MetricsModule,
+          },
+        ],
+      },
+    ])
+  ],
+})
+```
+
+<CalloutInfo>
+  建议谨慎使用该功能，层级过深的路由结构可能会导致代码难以维护。
+</CalloutInfo>
+
+在上述示例中，`DashboardModule` 中注册的所有控制器都会自动带上 `/admin/dashboard` 路径前缀；同样，`MetricsModule` 中的控制器也会统一应用 `/admin/metrics` 前缀。这是因为模块路径会从顶层父模块开始，递归拼接其所有子模块的路径配置。
+
+## 使用场景
+
+`RouterModule` 在以下几种常见场景中特别有用：
+
+### 1. API 版本管理
+
+当你需要同时维护多个 API 版本时，可以使用 `RouterModule` 为不同版本的模块添加路径前缀：
+
+```ts filename='app.module.ts'
+@Module({
+  imports: [
+    UsersV1Module,
+    UsersV2Module,
+    OrdersV1Module,
+    OrdersV2Module,
+    RouterModule.register([
+      {
+        path: 'v1',
+        children: [
+          { path: 'users', module: UsersV1Module },
+          { path: 'orders', module: OrdersV1Module },
+        ],
+      },
+      {
+        path: 'v2',
+        children: [
+          { path: 'users', module: UsersV2Module },
+          { path: 'orders', module: OrdersV2Module },
+        ],
+      },
+    ]),
+  ],
+})
+export class AppModule {}
+```
+
+这样配置后，你的 API 结构将如下所示：
+
+- `/v1/users/*` - 用户相关的 v1 版本 API
+- `/v1/orders/*` - 订单相关的 v1 版本 API
+- `/v2/users/*` - 用户相关的 v2 版本 API
+- `/v2/orders/*` - 订单相关的 v2 版本 API
+
+### 2. 多租户架构
+
+在 SaaS 应用中，你可能需要为不同的租户提供独立的 API 端点：
+
+```ts filename='app.module.ts'
+@Module({
+  imports: [
+    TenantModule,
+    RouterModule.register([
+      {
+        path: 'tenants/:tenantId',
+        module: TenantModule,
+        children: [
+          { path: 'projects', module: ProjectModule },
+          { path: 'billing', module: BillingModule },
+          { path: 'analytics', module: AnalyticsModule },
+        ],
+      },
+    ]),
+  ],
+})
+export class AppModule {}
+```
+
+这将创建如下的路由结构：
+
+- `/tenants/abc-corp/projects/*` - abc-corp 租户的项目管理
+- `/tenants/abc-corp/billing/*` - abc-corp 租户的计费系统
+- `/tenants/xyz-inc/analytics/*` - xyz-inc 租户的数据分析
+
+### 3. 微服务边界划分
+
+当你的应用需要清晰地区分不同的业务域时，`RouterModule` 可以帮助你在单体应用中模拟微服务的边界：
+
+```ts filename='app.module.ts'
+@Module({
+  imports: [
+    UserManagementModule,
+    InventoryModule,
+    PaymentModule,
+    RouterModule.register([
+      {
+        path: 'user-service',
+        module: UserManagementModule,
+      },
+      {
+        path: 'inventory-service',
+        module: InventoryModule,
+      },
+      {
+        path: 'payment-service',
+        module: PaymentModule,
+      },
+    ]),
+  ],
+})
+export class AppModule {}
+```
+
+### 4. 管理后台与前台 API 分离
+
+在电商或内容管理系统中，通常需要区分面向用户的前台 API 和管理员使用的后台 API：
+
+```ts filename='app.module.ts'
+@Module({
+  imports: [
+    PublicModule,
+    AdminModule,
+    RouterModule.register([
+      {
+        path: 'api/public',
+        module: PublicModule,
+        children: [
+          { path: 'products', module: ProductsPublicModule },
+          { path: 'auth', module: AuthPublicModule },
+        ],
+      },
+      {
+        path: 'api/admin',
+        module: AdminModule,
+        children: [
+          { path: 'products', module: ProductsAdminModule },
+          { path: 'users', module: UsersAdminModule },
+          { path: 'orders', module: OrdersAdminModule },
+        ],
+      },
+    ]),
+  ],
+})
+export class AppModule {}
+```
+
+这将产生如下路由结构：
+
+- `/api/public/products/*` - 公开的产品信息 API
+- `/api/public/auth/*` - 用户认证相关 API
+- `/api/admin/products/*` - 管理员产品管理 API
+- `/api/admin/users/*` - 用户管理 API
+- `/api/admin/orders/*` - 订单管理 API
+
+## 实际示例：集中式路由配置
+
+在复杂的应用中，你可能希望将路由配置从主模块中分离出来，创建专门的路由模块来管理特定功能域的路由。这种模式特别适用于大型项目，可以让路由结构更加清晰和易于维护。
+
+以后台管理系统为例，假设你需要配置 `/admin/users` 和 `/admin/reports` 等路径，可以采用以下集中式配置方式：
+
+### 1. 定义功能模块
+
+首先，创建各个功能模块，每个模块专注于自己的业务逻辑：
+
+```ts filename='modules/users/users.module.ts'
+@Controller()
+export class UsersController {
+  @Get()
+  findAll() {
+    // 获取用户列表
+    return this.usersService.findAll()
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    // 获取单个用户
+    return this.usersService.findOne(id)
+  }
+
+  @Post()
+  create(@Body() userData: CreateUserDto) {
+    // 创建用户
+    return this.usersService.create(userData)
+  }
+}
+
+@Module({
+  controllers: [UsersController],
+  providers: [UsersService],
+})
+export class UsersModule {}
+```
+
+```ts filename='modules/reports/reports.module.ts'
+@Controller()
+export class ReportsController {
+  @Get()
+  getReports() {
+    // 获取报告列表
+    return this.reportsService.getReports()
+  }
+
+  @Get('analytics')
+  getAnalytics() {
+    // 获取分析数据
+    return this.reportsService.getAnalytics()
+  }
+
+  @Post('generate')
+  generateReport(@Body() config: ReportConfigDto) {
+    // 生成新报告
+    return this.reportsService.generateReport(config)
+  }
+}
+
+@Module({
+  controllers: [ReportsController],
+  providers: [ReportsService],
+})
+export class ReportsModule {}
+```
+
+### 2. 创建专门的路由配置模块
+
+接下来，创建一个专门的路由模块来管理后台相关的所有路由配置：
+
+```ts filename='modules/admin/admin-routing.module.ts'
+import { Module } from '@nestjs/common'
+import { RouterModule } from '@nestjs/core'
+import { UsersModule } from '../users/users.module'
+import { ReportsModule } from '../reports/reports.module'
+
+@Module({
+  imports: [
+    UsersModule,
+    ReportsModule,
+    RouterModule.register([
+      {
+        path: 'admin',
+        children: [
+          {
+            path: 'users',
+            module: UsersModule,
+          },
+          {
+            path: 'reports',
+            module: ReportsModule,
+          },
+        ],
+      },
+    ]),
+  ],
+})
+export class AdminRoutingModule {}
+```
+
+### 3. 在根模块中引入路由模块
+
+最后，在应用的根模块中引入这个路由配置模块：
+
+```ts filename='app.module.ts'
+@Module({
+  imports: [
+    AdminRoutingModule,
+    // 可以继续添加其他业务路由模块
+    // PublicRoutingModule,
+    // ApiV2RoutingModule,
+  ],
+})
+export class AppModule {}
+```
+
+### 配置结果
+
+通过这种集中式配置，你将得到以下路由结构：
+
+- `GET /admin/users` - 获取用户列表
+- `GET /admin/users/:id` - 获取单个用户
+- `POST /admin/users` - 创建用户
+- `GET /admin/reports` - 获取报告列表
+- `GET /admin/reports/analytics` - 获取分析数据
+- `POST /admin/reports/generate` - 生成新报告
+
+### 集中式配置的优势
+
+这种集中式路由配置模式具有以下优势：
+
+1. **清晰的关注点分离**：路由配置与业务逻辑分离，每个模块职责明确
+2. **易于维护**：所有相关路由配置集中在一个地方，便于管理和修改
+3. **良好的可扩展性**：可以轻松添加新的子模块和路由
+4. **代码组织有序**：大型项目中可以避免根模块变得过于庞大
+5. **团队协作友好**：不同团队可以独立维护各自的路由配置模块
+
+这种模式特别适合于具有多个功能域的大型应用，如企业级后台管理系统、多租户 SaaS 平台等场景。
+
+## 最佳实践
+
+使用 `RouterModule` 时，建议遵循以下最佳实践：
+
+### 1. 保持路径层级简洁
+
+避免创建过深的嵌套路径，一般建议不超过 3-4 层：
+
+```ts
+// ✅ 推荐：层级清晰，易于理解
+RouterModule.register([
+  {
+    path: 'api/v1',
+    children: [
+      { path: 'users', module: UsersModule },
+      { path: 'orders', module: OrdersModule },
+    ],
+  },
+])
+
+// ❌ 不推荐：层级过深，难以维护
+RouterModule.register([
+  {
+    path: 'api',
+    children: [
+      {
+        path: 'v1',
+        children: [
+          {
+            path: 'admin',
+            children: [
+              {
+                path: 'management',
+                children: [{ path: 'users', module: UsersModule }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+])
+```
+
+### 2. 统一命名规范
+
+为路径使用一致的命名约定，建议使用小写字母和连字符：
+
+```ts
+// ✅ 推荐：统一使用 kebab-case
+RouterModule.register([
+  { path: 'user-management', module: UserManagementModule },
+  { path: 'order-history', module: OrderHistoryModule },
+  { path: 'product-catalog', module: ProductCatalogModule },
+])
+
+// ❌ 不推荐：命名风格不一致
+RouterModule.register([
+  { path: 'userManagement', module: UserManagementModule },
+  { path: 'order_history', module: OrderHistoryModule },
+  { path: 'ProductCatalog', module: ProductCatalogModule },
+])
+```
+
+### 3. 合理分组相关功能
+
+将相关的业务功能组织在同一个路径分组下：
+
+```ts
+RouterModule.register([
+  {
+    path: 'user',
+    children: [
+      { path: 'profile', module: UserProfileModule },
+      { path: 'preferences', module: UserPreferencesModule },
+      { path: 'notifications', module: UserNotificationsModule },
+    ],
+  },
+  {
+    path: 'commerce',
+    children: [
+      { path: 'products', module: ProductsModule },
+      { path: 'orders', module: OrdersModule },
+      { path: 'payments', module: PaymentsModule },
+    ],
+  },
+])
+```
+
+### 4. 文档化路由结构
+
+在大型项目中，建议在代码注释或独立文档中记录完整的路由结构：
+
+```ts
+/**
+ * 应用路由结构：
+ *
+ * /api/v1/
+ *   ├── users/          - 用户管理
+ *   ├── products/       - 产品管理
+ *   └── orders/         - 订单管理
+ *
+ * /api/admin/
+ *   ├── dashboard/      - 管理面板
+ *   ├── analytics/      - 数据分析
+ *   └── settings/       - 系统设置
+ */
+RouterModule.register([
+  // 路由配置...
+])
+```
+
+通过合理使用 `RouterModule`，你可以构建出结构清晰、易于维护的路由体系，让你的 Nest.js 应用更加组织有序。

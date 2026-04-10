@@ -1,0 +1,182 @@
+# 生命周期事件
+
+Nest 应用程序及其各个组成部分，都遵循框架统一的生命周期管理机制。为了方便在不同阶段执行特定逻辑，Nest 提供了一套**生命周期钩子**（Lifecycle Hooks）。通过这些钩子，你可以在模块、提供者或控制器的初始化与销毁等关键节点，插入自定义的处理逻辑，实现资源初始化、清理等操作。
+
+## 生命周期流程
+
+下图展示了从应用启动到 Node.js 进程退出期间，各个生命周期事件的调用顺序。整个生命周期可以划分为三个阶段：**初始化**（initializing）、**运行中**（running） 和**终止中**（terminating）。
+
+掌握这三个阶段的执行流程，有助于你更合理地规划服务的初始化和资源管理，例如在合适的时机建立连接或注册任务。同时，也能帮助你在接收到关闭信号时，实现应用的**优雅退出**，确保资源被正确释放，系统平稳停机。
+
+```mermaid
+flowchart TD
+    Start([启动应用]) --> Deps[依赖注入容器<br/>解析模块依赖]
+    Deps --> ModInit[onModuleInit<br/>各模块逐一初始化<br/>执行初始化逻辑]
+    ModInit --> AppBoot[onApplicationBootstrap<br/>所有模块初始化完成<br/>应用引导阶段完成]
+    AppBoot --> Listen[启动服务监听器<br/>HTTP服务器 / WebSocket服务器<br/>开始接受连接]
+    Listen --> Running{应用运行中<br/>处理用户请求<br/>执行业务逻辑}
+
+    Running -->|正常运行| Running
+    Running -->|收到终止信号| Signal[接收终止信号<br/>SIGTERM / SIGINT<br/>开始优雅关闭流程]
+
+    Signal --> ModDest[onModuleDestroy<br/>通知各模块准备销毁<br/>清理模块级资源]
+    ModDest --> BeforeShut[beforeApplicationShutdown<br/>所有模块销毁完成<br/>准备关闭应用连接]
+    BeforeShut --> StopListen[停止监听器<br/>拒绝新连接<br/>等待现有请求完成]
+    StopListen --> AppShut[onApplicationShutdown<br/>所有连接已关闭<br/>执行最终清理工作]
+    AppShut --> Exit([进程退出])
+
+    subgraph init [初始化阶段]
+        Deps
+        ModInit
+        AppBoot
+        Listen
+    end
+
+    subgraph run [运行阶段]
+        Running
+    end
+
+    subgraph term [终止阶段]
+        Signal
+        ModDest
+        BeforeShut
+        StopListen
+        AppShut
+    end
+```
+
+## 生命周期事件
+
+在应用启动和关闭的过程中，Nest 会依照特定的生命周期阶段，自动调用已注册的生命周期钩子方法。这些钩子可定义在模块、提供者或控制器中，用于在特定时机插入自定义逻辑（例如资源初始化或清理）。需要注意的是，部分关闭阶段的钩子需要显式启用，具体可参考[后文说明](#应用关闭机制)。
+
+如上图所示，Nest 在调用各类钩子的同时，也会在底层负责管理应用的连接监听状态（例如启动或停止 HTTP 服务器）。
+
+需要注意的是，部分生命周期钩子仅在应用显式调用 `app.init()` 或 `app.listen()` 时才会被触发，例如：
+
+- `onModuleInit`
+- `onApplicationBootstrap`
+
+而应用关闭阶段的钩子 —— 如 `onModuleDestroy`、`beforeApplicationShutdown` 和 `onApplicationShutdown`，则需在调用 `app.close()`，或进程接收到诸如 `SIGTERM` 等系统信号时才会生效。此外，响应系统信号还要求显式启用关闭钩子。
+
+### 生命周期钩子与对应事件
+
+| 生命周期钩子方法                | 触发时机                                                                                                                               |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `onModuleInit()`                | 当宿主模块的所有依赖关系解析完成后调用。                                                                                               |
+| `onApplicationBootstrap()`      | 所有模块均已初始化完成，但在应用开始监听端口或建立连接之前调用。                                                                       |
+| `onModuleDestroy()`\*           | 当应用接收到终止信号（如 `SIGTERM`）时触发。                                                                                           |
+| `beforeApplicationShutdown()`\* | 在所有模块的 `onModuleDestroy()` 钩子执行完毕（相关 `Promise` 已解析或拒绝）后调用；随后应用将关闭所有连接，相当于执行 `app.close()`。 |
+| `onApplicationShutdown()`\*     | 在应用的所有连接关闭完成（即 `app.close()` 执行并解析后）调用。                                                                        |
+
+\* 上述钩子不会在默认情况下响应系统信号，需调用 `app.enableShutdownHooks()` 主动启用。
+
+<CalloutInfo type="warning">
+  生命周期钩子**不会**在请求作用域类中触发。这是因为请求作用域类的实例在每个请求中动态创建，生命周期受请求驱动，且会在响应结束后被自动销毁，不参与应用生命周期管理。
+</CalloutInfo>
+
+<CalloutInfo>
+  `onModuleInit()` 和 `onApplicationBootstrap()`
+  钩子的执行顺序会严格按照模块的导入顺序依次调用，并且只有当前模块的钩子方法执行完成后，才会继续执行下一个模块的同一钩子。
+</CalloutInfo>
+
+## 生命周期钩子的用法
+
+Nest 为每个生命周期钩子都提供了对应的接口。虽然这些接口在 TypeScript 编译后并不会被保留，因此并不是强制要求实现，但**建议这么做**：这样不仅可以获得类型检查的保护，还能享受更完善的编辑器智能提示。
+
+要使用某个生命周期钩子，只需在相应的类（如控制器、提供者或模块）中实现对应的接口，并定义相应的方法。例如，如果你想在模块初始化时执行一些自定义逻辑，只需实现 `OnModuleInit` 接口，并在类中添加 `onModuleInit()` 方法，如下所示：
+
+```ts
+import { Injectable, OnModuleInit } from '@nestjs/common'
+
+@Injectable()
+export class UsersService implements OnModuleInit {
+  onModuleInit() {
+    console.log('该模块初始化完成')
+  }
+}
+```
+
+## 异步初始化
+
+`OnModuleInit` 和 `OnApplicationBootstrap` 等生命周期钩子同样支持异步操作。也就是说，这些钩子方法既可以返回 `Promise`，也可以通过 `async/await` 来处理异步任务。借助这一特性，我们可以在模块初始化或应用启动阶段执行需要等待完成的逻辑，从而有序地延迟后续流程的继续推进，确保初始化过程满足特定依赖条件。
+
+```ts
+async onModuleInit(): Promise<void> {
+  await this.fetch()
+}
+```
+
+## 应用关闭机制
+
+在应用终止时，Nest 会依次触发以下生命周期钩子：
+
+1. `onModuleDestroy()`
+2. `beforeApplicationShutdown()`
+3. `onApplicationShutdown()`
+
+这些钩子会在两种情况下被执行：
+
+- 显式调用 `app.close()` 时。
+- 应用接收到系统终止信号（如 `SIGTERM`）且已手动开启了「关闭钩子监听」时。
+
+这一机制在容器化部署环境中尤为关键，例如在 [Kubernetes](https://kubernetes.io/) 中配合 Pod 生命周期管理，或在 [Heroku](https://www.heroku.com/) 等平台上优雅地关闭 dyno 实例。
+
+### 启用关闭钩子
+
+出于性能考虑，Nest 默认不会启用关闭钩子监听器。如果需要使用，必须显式调用 `enableShutdownHooks()` 方法：
+
+```ts
+import { NestFactory } from '@nestjs/core'
+import { AppModule } from './app.module'
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule)
+
+  // 启用关闭钩子
+  app.enableShutdownHooks()
+
+  await app.listen(process.env.PORT ?? 3000)
+}
+```
+
+<CalloutInfo type="warning" title="Windows 平台限制">
+由于平台机制限制，Nest 在 Windows 上对关闭钩子的支持存在差异。例如 `SIGINT`、`SIGBREAK` 和部分 `SIGHUP` 通常可以正常工作（详见 [Node.js 信号文档](https://nodejs.org/api/process.html#process_signal_events)）。但 `SIGTERM` 在 Windows 中始终无效，因为任务管理器直接终止进程时不会发送此信号，应用也无法感知或阻止该行为。
+
+推荐阅读： [libuv 信号文档](https://docs.libuv.org/en/v1.x/signal.html)
+
+</CalloutInfo>
+
+<CalloutInfo title="多实例运行时的监听器限制">
+  启用关闭钩子会注册进程监听器，增加内存占用。在单个 Node 进程中运行多个 Nest
+  应用（如使用 Jest 并行测试）时，可能因监听器过多而触发 Node
+  的警告提示。因此，`enableShutdownHooks()`
+  默认关闭，使用时请评估实例数量和资源情况。
+</CalloutInfo>
+
+### 钩子执行顺序与信号传递
+
+当应用收到终止信号（例如 `SIGINT`），Nest 会依照以下顺序调用生命周期钩子：
+
+1. `onModuleDestroy()`
+2. `beforeApplicationShutdown()`
+3. `onApplicationShutdown(signal: string)`
+
+如果这些钩子方法是异步的（即返回 `Promise`），Nest 会等待每个 `Promise` 被解析或拒绝后再继续执行下一个钩子。
+
+示例：
+
+```ts
+@Injectable()
+class UsersService implements OnApplicationShutdown {
+  onApplicationShutdown(signal: string) {
+    console.log(signal) // 输出接收到的信号，例如 "SIGINT"
+  }
+}
+```
+
+<CalloutInfo>
+  `app.close()` 不会关闭 Node.js 进程，只会触发 `onModuleDestroy()` 和
+  `onApplicationShutdown()`
+  钩子。如果应用中存在定时器、长时间运行的任务等，进程仍会继续运行，需手动清理或调用
+  `process.exit()`。
+</CalloutInfo>

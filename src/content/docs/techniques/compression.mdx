@@ -1,0 +1,82 @@
+# 压缩（Compression）
+
+通过对响应体进行压缩，可以显著减少数据传输的体积，从而提升 Web 应用的响应速度，尤其适用于网络环境较差或数据量较大的场景。
+
+在**高并发的生产环境**中，强烈建议将压缩操作交由反向代理服务器（如 Nginx）处理，而不是在应用层实现。这样不仅能够减轻应用服务器的负担，还能提升整体系统性能。因此，在此类场景下**不建议**在应用中启用压缩中间件。
+
+## 在 Express 中使用
+
+如果你使用的是默认的 Express 平台，可以借助 [`compression`](https://github.com/expressjs/compression) 中间件为应用添加 gzip 压缩支持。
+
+首先安装相关依赖：
+
+```bash
+npm install compression
+npm install -D @types/compression
+```
+
+然后，在应用初始化阶段将其作为全局中间件注册：
+
+```ts filename='main.ts'
+import * as compression from 'compression'
+
+app.use(compression())
+```
+
+## 在 Fastify 中使用
+
+如果你选择了 `FastifyAdapter`，建议使用官方提供的 [`@fastify/compress`](https://github.com/fastify/fastify-compress) 插件来实现响应压缩：
+
+```bash
+npm install @fastify/compress
+```
+
+安装完成后，在应用初始化时注册该插件：
+
+```ts filename='main.ts'
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify'
+import compression from '@fastify/compress'
+
+async function bootstrap() {
+  const app = await NestFactory.create<NestFastifyApplication>(
+    AppModule,
+    new FastifyAdapter()
+  )
+
+  await app.register(compression)
+}
+```
+
+<CalloutInfo type="warning">
+  请确保在创建应用时使用 `NestFastifyApplication` 类型，否则将无法使用
+  `register` 方法来应用压缩中间件（compression-middleware）。
+</CalloutInfo>
+
+默认配置下，`@fastify/compress` 会根据客户端支持情况优先启用 Brotli 压缩（要求 Node.js 版本 ≥ 11.7.0）。相较于 gzip，Brotli 通常具备更高的压缩比，但压缩耗时也可能略高。
+
+你可以通过设置 `BROTLI_PARAM_QUALITY` 参数（取值范围为 0～11）来平衡压缩率与压缩速度。例如，以下配置将压缩质量设置为 4：
+
+```ts filename='main.ts'
+import { constants } from 'node:zlib'
+
+await app.register(compression, {
+  brotliOptions: {
+    params: {
+      [constants.BROTLI_PARAM_QUALITY]: 4,
+    },
+  },
+})
+```
+
+如果你更关注压缩性能而非压缩比，也可以禁用 Brotli，仅使用 gzip 和 deflate，这通常能获得更快的响应速度。你可以通过 `encodings` 参数显式指定可用的压缩格式：
+
+```ts
+await app.register(compression, {
+  encodings: ['gzip', 'deflate'],
+})
+```
+
+上述配置将在客户端同时支持 gzip 与 deflate 时，优先使用 gzip。

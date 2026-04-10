@@ -1,0 +1,446 @@
+# SWC 编译支持
+
+[SWC](https://swc.rs/)（Speedy Web Compiler）是一个由 Rust 编写的高性能编译器平台，具备良好的可扩展性，常用于代码的转译与打包。将 SWC 集成至 Nest CLI 后，能够显著提升项目的构建效率，是一种简洁而高效的开发加速方案。
+
+<CalloutInfo>
+  与默认的 TypeScript 编译器相比，SWC 的编译速度最高可提升至 **20 倍**。
+</CalloutInfo>
+
+## 安装依赖
+
+首先，安装所需的开发依赖：
+
+```bash
+npm install -D @swc/cli @swc/core
+```
+
+## 快速上手
+
+安装完成后，即可通过以下命令使用 SWC 构建 Nest 应用：
+
+```bash
+nest start -b swc
+# 或 nest start --builder swc
+```
+
+<CalloutInfo>
+  如果你的项目采用 Monorepo
+  架构，请参考[多包仓库结构配置](/recipes/swc#多包仓库项目配置)。
+</CalloutInfo>
+
+除了通过 `-b` 参数指定构建器外，你也可以在 `nest-cli.json` 配置文件中设置默认构建器：
+
+```json filename='nest-cli.json'
+{
+  "compilerOptions": {
+    "builder": "swc"
+  }
+}
+```
+
+如需进一步自定义构建行为，可指定一个包含 `type` 和 `options` 字段的构建器对象，例如：
+
+```json filename='nest-cli.json'
+{
+  "compilerOptions": {
+    "builder": {
+      "type": "swc",
+      "options": {
+        "swcrcPath": "infrastructure/.swcrc"
+      }
+    }
+  }
+}
+```
+
+例如，要让 swc 编译 `.jsx` 和 `.tsx` 文件，可以这样做：
+
+```json
+{
+  "compilerOptions": {
+    "builder": {
+      "type": "swc",
+      "options": { "extensions": [".ts", ".tsx", ".js", ".jsx"] }
+    }
+  }
+}
+```
+
+如果希望在开发过程中启用监听模式（watch mode），可使用以下命令：
+
+```bash
+nest start -b swc -w
+# 或 nest start --builder swc --watch
+```
+
+## 类型检查支持
+
+与 TypeScript 官方编译器不同，SWC 默认**不会执行类型检查**。
+
+如果希望在开发过程中启用类型检查，可以通过添加 `--type-check` 参数来实现：
+
+```bash
+nest start -b swc --type-check
+```
+
+该命令会在不生成输出文件（即启用 `noEmit` 模式）的前提下，同时运行 tsc 和 SWC，从而实现类型检查与编译任务的并行处理，提高构建效率。
+
+此外，你也可以通过修改 `nest-cli.json` 文件中的配置，实现相同的效果：
+
+```json filename='nest-cli.json'
+{
+  "compilerOptions": {
+    "builder": "swc",
+    "typeCheck": true
+  }
+}
+```
+
+## CLI 插件支持
+
+在使用 `--type-check` 参数时，Nest CLI 会自动启用相关插件，并生成序列化的元数据文件，供应用在运行时加载和使用。
+
+## 自定义 SWC 配置
+
+Nest 集成的 SWC 构建器默认提供了一套通用配置，已能够覆盖大多数常见使用场景。但在某些特定需求下，你仍可以通过在项目根目录下添加 `.swcrc` 文件，来自定义构建行为。例如：
+
+```json
+{
+  "$schema": "https://swc.rs/schema.json",
+  "sourceMaps": true,
+  "jsc": {
+    "parser": {
+      "syntax": "typescript",
+      "decorators": true,
+      "dynamicImport": true
+    },
+    "baseUrl": "./"
+  },
+  "minify": false
+}
+```
+
+通过 `.swcrc` 文件，你可以灵活调整构建配置，例如启用或禁用装饰器语法、是否生成 Source Map、是否压缩输出等，满足不同场景下的开发或生产需求。
+
+## 多包仓库项目配置
+
+在使用 Monorepo 结构组织 NestJS 项目时，如需启用 SWC 编译器进行构建优化，应手动配置 webpack 并集成 `swc-loader`，而非直接使用 swc 构建器。
+
+### 安装依赖
+
+首先，安装必要的 `swc-loader` 依赖：
+
+```bash
+npm install -D swc-loader
+```
+
+### 配置 webpack
+
+在应用根目录下创建 `webpack.config.js` 文件，并添加以下内容：
+
+```js
+const swcDefaultConfig =
+  require('@nestjs/cli/lib/compiler/defaults/swc-defaults').swcDefaultsFactory()
+    .swcOptions
+
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.ts$/,
+        exclude: /node_modules/,
+        use: {
+          loader: 'swc-loader',
+          options: swcDefaultConfig,
+        },
+      },
+    ],
+  },
+}
+```
+
+该配置指定 `.ts` 文件使用 `swc-loader` 进行编译，并复用了 Nest CLI 默认的 SWC 编译选项。
+
+## 集成 Nest CLI 插件（如 Swagger）
+
+在 Monorepo 项目中集成 Nest CLI 插件（如 `@nestjs/swagger`）时，`swc-loader` 并不会自动加载这些插件。因此，你需要显式创建一个脚本来生成插件元数据。
+
+### 步骤一：创建生成器脚本
+
+在 `main.ts` 文件的同级目录下创建 `generate-metadata.ts` 文件：
+
+```ts filename='generate-metadata.ts'
+import { PluginMetadataGenerator } from '@nestjs/cli/lib/compiler/plugins/plugin-metadata-generator'
+import { ReadonlyVisitor } from '@nestjs/swagger/dist/plugin'
+
+const generator = new PluginMetadataGenerator()
+generator.generate({
+  visitors: [
+    new ReadonlyVisitor({ introspectComments: true, pathToSource: __dirname }),
+  ],
+  outputDir: __dirname,
+  watch: true,
+  tsconfigPath: 'apps/<name>/tsconfig.app.json',
+})
+```
+
+<CalloutInfo>
+  本示例使用的是 `@nestjs/swagger`
+  插件。你可以根据实际项目替换为其他插件及其访问器（Visitor）。
+</CalloutInfo>
+
+#### `generate()` 方法参数说明
+
+| 参数名             | 说明                                                                 |
+| ------------------ | -------------------------------------------------------------------- |
+| `watch`            | 是否启用监听模式，监控文件变更后自动重新生成。                       |
+| `tsconfigPath`     | 指定 `tsconfig.json` 路径，基于当前工作目录（`process.cwd()`）计算。 |
+| `outputDir`        | 输出的元数据文件所在目录。                                           |
+| `visitors`         | 插件访问器数组，用于提取必要的元信息。                               |
+| `filename`         | 输出文件名，默认值为 `metadata.ts`。                                 |
+| `printDiagnostics` | 是否打印诊断信息，默认启用。                                         |
+
+### 步骤二：运行生成脚本
+
+你可以在单独的终端窗口中执行以下命令，生成插件元数据：
+
+```bash
+npx ts-node src/generate-metadata.ts
+# 或者
+npx ts-node apps/{YOUR_APP}/src/generate-metadata.ts
+```
+
+## 常见陷阱
+
+在使用 TypeORM、MikroORM 或其他 ORM 时，可能会遇到**循环依赖**的问题。由于 SWC 对循环依赖的处理不够完善，推荐使用如下方式规避：
+
+```ts
+@Entity()
+export class User {
+  @OneToOne(() => Profile, (profile) => profile.user)
+  profile: Relation<Profile> // ✅ 使用 "Relation<>" 包装类型，避免直接引用 "Profile"
+}
+```
+
+<CalloutInfo>
+  `Relation` 类型由 `typeorm` 包提供，用于延迟类型解析。
+</CalloutInfo>
+
+这种写法可以避免在转译后的代码中生成属性类型的元数据，从而有效防止因模块加载顺序导致的循环依赖问题。
+
+如果你使用的 ORM 没有提供类似的包装类型，也可以手动定义一个替代方案：
+
+```ts
+/**
+ * 用于规避 ESM 模块循环依赖问题的通用包装类型。
+ * 可防止反射元数据记录属性的实际类型。
+ */
+export type WrapperType<T> = T // 类似 TypeORM 中的 Relation
+```
+
+在所有涉及[循环依赖注入](/fundamentals/circular-dependency)的场景中，也建议采用上述包装类型：
+
+```ts
+@Injectable()
+export class UsersService {
+  constructor(
+    @Inject(forwardRef(() => ProfileService))
+    private readonly profileService: WrapperType<ProfileService>
+  ) {}
+}
+```
+
+## 使用 SWC 加速 Jest 测试
+
+若希望通过 SWC 提升 Jest 测试速度，需要先安装以下开发依赖：
+
+```bash
+npm install -D jest @swc/core @swc/jest
+```
+
+安装完成后，根据项目情况配置 `package.json` 或 `jest.config.js`：
+
+```json
+{
+  "jest": {
+    "transform": {
+      "^.+\\.(t|j)s?$": ["@swc/jest"]
+    }
+  }
+}
+```
+
+接着，在 `.swcrc` 文件中添加对装饰器元数据的支持：
+
+```json
+{
+  "$schema": "https://swc.rs/schema.json",
+  "sourceMaps": true,
+  "jsc": {
+    "parser": {
+      "syntax": "typescript",
+      "decorators": true,
+      "dynamicImport": true
+    },
+    "transform": {
+      "legacyDecorator": true,
+      "decoratorMetadata": true
+    },
+    "baseUrl": "./"
+  },
+  "minify": false
+}
+```
+
+如果你的项目启用了 Nest CLI 插件，还需手动运行 `PluginMetadataGenerator`，具体操作请参考：[集成 Nest CLI 插件](#集成-nest-cli-插件如-swagger)。
+
+## 使用 Vitest 加速测试
+
+[Vitest](https://vitest.dev/) 是一款专为 Vite 生态设计的轻量级、快速的测试运行器。它为 NestJS 项目提供了现代化、高性能且易于上手的测试方案，适合作为 Jest 的替代选择。
+
+### 安装依赖
+
+首先，安装 Vitest 及相关依赖：
+
+```bash
+npm install -D vitest unplugin-swc @swc/core @vitest/coverage-v8
+```
+
+### 配置 Vitest
+
+在项目根目录下创建一个 `vitest.config.ts` 文件，内容如下：
+
+```ts
+import { defineConfig } from 'vitest/config'
+import swc from 'unplugin-swc'
+import { resolve } from 'path'
+
+export default defineConfig({
+  test: {
+    globals: true,
+    root: './',
+  },
+  plugins: [
+    // 使用 SWC 编译测试文件
+    swc.vite({
+      // 显式设置模块类型，避免继承 .swcrc 中的 module 配置
+      module: { type: 'es6' },
+    }),
+  ],
+  resolve: {
+    alias: {
+      // 配置路径别名，确保 Vitest 能正确解析
+      src: resolve(__dirname, './src'),
+    },
+  },
+})
+```
+
+此配置文件设置了 Vitest 的基本测试环境，包括测试根目录、插件注册及路径别名支持。
+
+### 配置 E2E 测试
+
+对于端到端（E2E）测试，建议单独创建一个配置文件，并通过 `include` 选项使用正则匹配指定的测试文件：
+
+```ts
+import { defineConfig } from 'vitest/config'
+import swc from 'unplugin-swc'
+
+export default defineConfig({
+  test: {
+    include: ['**/*.e2e-spec.ts'],
+    globals: true,
+    root: './',
+  },
+  plugins: [swc.vite()],
+})
+```
+
+如果项目使用了 TypeScript 的路径映射（`paths`），你可以通过 `resolve.alias` 明确配置别名：
+
+```ts
+import { defineConfig } from 'vitest/config'
+import swc from 'unplugin-swc'
+
+export default defineConfig({
+  test: {
+    include: ['**/*.e2e-spec.ts'],
+    globals: true,
+    root: './',
+  },
+  resolve: {
+    alias: {
+      '@src': './src',
+      '@test': './test',
+    },
+  },
+  plugins: [swc.vite()],
+})
+```
+
+### 路径别名
+
+与 Jest 不同，Vitest 不会自动识别 TypeScript 配置中的路径别名（如 `@/` 或 `@src/`）。这可能会在运行测试时引发模块解析错误。
+
+为解决此问题，需要在 `vitest.config.ts` 中手动配置 `resolve.alias`：
+
+```ts
+import { resolve } from 'path'
+import { defineConfig } from 'vitest/config'
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      src: resolve(__dirname, './src'),
+    },
+  },
+})
+```
+
+通过显式声明路径别名，Vitest 才能正确解析模块导入，避免因路径映射缺失导致的依赖错误。
+
+### 更新 E2E 测试中的导入方式
+
+在使用 Vitest 运行端到端（E2E）测试时，应将以下导入语句：
+
+```ts
+import * as request from 'supertest'
+```
+
+修改为：
+
+```ts
+import request from 'supertest'
+```
+
+这是因为在 Vitest 与 Vite 集成的环境中，`supertest` 需要通过默认导入的方式使用。若继续使用命名空间导入（`import * as ...`），可能会引发兼容性问题，导致测试无法正常执行。
+
+### 配置测试脚本
+
+最后，在项目的 `package.json` 文件中添加或更新如下测试脚本：
+
+```json
+{
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage",
+    "test:debug": "vitest --inspect-brk --inspect --logHeapUsage --threads=false",
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+  }
+}
+```
+
+这些脚本涵盖了常见的测试需求，包括：
+
+- `test`：执行所有测试
+- `test:watch`：监听文件变更并自动运行测试
+- `test:cov`：生成测试覆盖率报告
+- `test:debug`：以调试模式运行 Vitest，便于定位问题
+- `test:e2e`：使用自定义配置文件运行端到端测试
+
+通过以上配置，即可在 NestJS 项目中顺利集成 Vitest，体验更快的测试速度与更现代的开发流程。
+
+<CalloutInfo>
+  想了解完整示例项目，可参考官方仓库：[TrilonIO/nest-vitest](https://github.com/TrilonIO/nest-vitest)。
+</CalloutInfo>

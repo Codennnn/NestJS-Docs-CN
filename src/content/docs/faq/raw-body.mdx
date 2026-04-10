@@ -1,0 +1,135 @@
+# 原始请求体
+
+在某些特定场景中，你可能需要获取**未经解析的原始请求体**，例如在校验 Webhook 签名时。此类操作通常依赖于对原始请求内容进行 HMAC 等哈希计算，因此不能使用已解析的 JSON 对象。
+
+<CalloutInfo type="warning">
+  原始请求体功能依赖于内置的全局 `body-parser`
+  中间件，**必须保持启用状态**。换言之，创建应用时不能将 `bodyParser` 设置为
+  `false`。
+</CalloutInfo>
+
+### 在 Express 中使用
+
+若你使用的是基于 Express 的 Nest 应用，可通过以下方式启用原始请求体功能：
+
+```ts filename='main.ts'
+import { NestFactory } from '@nestjs/core'
+import type { NestExpressApplication } from '@nestjs/platform-express'
+import { AppModule } from './app.module'
+
+const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+  rawBody: true, // 启用原始请求体支持
+})
+
+await app.listen(process.env.PORT ?? 3000)
+```
+
+### 访问原始请求体内容
+
+启用后，你可以在控制器中通过 `RawBodyRequest` 类型访问原始请求体，它会在请求对象上添加 `rawBody` 字段：
+
+```ts filename='cats.controller.ts'
+import { Controller, Post, Req, RawBodyRequest } from '@nestjs/common'
+import type { Request } from 'express'
+
+@Controller('cats')
+export class CatsController {
+  @Post()
+  create(@Req() req: RawBodyRequest<Request>) {
+    const raw = req.rawBody // 返回 Buffer 实例，表示原始请求体内容
+  }
+}
+```
+
+<CalloutInfo>
+  如果你需要验证如 Stripe、GitHub 等第三方服务发来的 Webhook
+  签名，请务必使用原始请求体进行计算。解析后的请求体可能会导致签名校验失败。
+</CalloutInfo>
+
+### 注册自定义请求体解析器
+
+Nest 默认内置了 `json` 和 `urlencoded` 两种请求体解析器。如果你需要处理其他格式的请求体（例如纯文本、XML 等），可以手动注册对应的解析器。
+
+以注册 `text` 解析器为例：
+
+```ts
+app.useBodyParser('text')
+```
+
+<CalloutInfo type="warning">
+  请确保你在调用 `NestFactory.create()` 时传入的是 `NestExpressApplication`
+  类型。否则，`useBodyParser()` 方法将不可用。
+</CalloutInfo>
+
+### 请求体大小限制
+
+在 Express 中，请求体的默认大小限制为 **100kb**。若你需要接收更大的请求体（例如大型 JSON、上传内容等），可以在注册解析器时通过选项进行调整：
+
+```ts
+app.useBodyParser('json', { limit: '10mb' })
+```
+
+如果你启用了 `rawBody: true`，该配置在自定义解析器中依然生效，原始请求体仍会被保留。
+
+## 在 Fastify 中使用
+
+在基于 Fastify 的 Nest 应用中启用原始请求体（`rawBody`）功能，你需要在创建应用实例时进行如下配置：
+
+```ts
+import { NestFactory } from '@nestjs/core'
+import {
+  FastifyAdapter,
+  NestFastifyApplication,
+} from '@nestjs/platform-fastify'
+import { AppModule } from './app.module'
+
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter(),
+  {
+    rawBody: true, // 启用原始请求体支持
+  }
+)
+await app.listen(process.env.PORT ?? 3000)
+```
+
+### 访问原始请求体
+
+启用 `rawBody` 后，可以在控制器中通过 `RawBodyRequest` 接口访问原始的请求体内容。该接口会在请求对象上新增一个 `rawBody` 字段，其值为原始的 Buffer 数据。例如：
+
+```ts
+import { Controller, Post, RawBodyRequest, Req } from '@nestjs/common'
+import { FastifyRequest } from 'fastify'
+
+@Controller('cats')
+class CatsController {
+  @Post()
+  create(@Req() req: RawBodyRequest<FastifyRequest>) {
+    const raw = req.rawBody // 原始请求体内容（Buffer 类型）
+  }
+}
+```
+
+### 注册自定义请求体解析器
+
+默认情况下，Nest 仅注册了对 `application/json` 和 `application/x-www-form-urlencoded` 的请求体解析。如果你的应用需要处理其他类型的请求体（例如纯文本），你可以通过 `useBodyParser()` 方法手动注册对应的解析器：
+
+```ts
+app.useBodyParser('text/plain')
+```
+
+<CalloutInfo type="warning">
+  只有在创建应用时明确指定了 `NestFastifyApplication` 类型，`useBodyParser()`
+  方法才可用。如果未指定正确类型，该方法将不可调用。
+</CalloutInfo>
+
+### 请求体大小限制
+
+Fastify 默认限制请求体大小为 **1MiB**。如果你的应用需要接收更大的请求体（例如上传较大的 JSON 数据），可以通过 `useBodyParser()` 方法手动调整限制。例如：
+
+```ts
+const bodyLimit = 10_485_760 // 设置为 10MiB
+app.useBodyParser('application/json', { bodyLimit })
+```
+
+需要注意的是，即使你手动调用了 `useBodyParser()`，此前在应用初始化时通过 `rawBody: true` 启用的原始请求体功能依然会生效，无需额外配置。

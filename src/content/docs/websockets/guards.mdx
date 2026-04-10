@@ -1,0 +1,22 @@
+# 守卫
+
+WebSocket 守卫与[常规 HTTP 应用守卫](/guards)在本质上没有区别。唯一的不同在于，这里不应抛出 `HttpException`，而是应该使用 `WsException`。
+
+<CalloutInfo>
+
+`WsException` 类由 `@nestjs/websockets` 包提供。
+
+</CalloutInfo>
+
+## 绑定守卫
+
+下例演示了方法作用域的守卫用法。与基于 HTTP 的应用类似，你也可以使用网关作用域的守卫（即在网关类前添加 `@UseGuards()` 装饰器）。
+
+```ts
+@UseGuards(AuthGuard)
+@SubscribeMessage('events')
+handleEvent(client: Client, data: unknown): WsResponse<unknown> {
+  const event = 'events'
+  return { event, data }
+}
+```

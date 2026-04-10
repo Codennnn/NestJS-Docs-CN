@@ -1,0 +1,69 @@
+# 异常过滤器（Exception filters）
+
+HTTP [异常过滤器](/exception-filters)层与对应的微服务层唯一的区别在于，这里不应抛出 `HttpException`，而是应使用 `RpcException`。
+
+```ts
+import { RpcException } from '@nestjs/microservices'
+
+throw new RpcException('Invalid credentials.')
+```
+
+如上示例，Nest 会处理抛出的异常，并返回如下结构的 `error` 对象：
+
+```json
+{
+  "status": "error",
+  "message": "Invalid credentials."
+}
+```
+
+## 过滤器（Filters）
+
+微服务异常过滤器的行为与 HTTP 异常过滤器类似，但有一个小区别：`catch()` 方法必须返回一个 `Observable`（可观察对象）。
+
+```ts filename='rpc-exception.filter.ts'
+import { Catch, RpcExceptionFilter, ArgumentsHost } from '@nestjs/common'
+import { Observable, throwError } from 'rxjs'
+import { RpcException } from '@nestjs/microservices'
+
+@Catch(RpcException)
+export class ExceptionFilter implements RpcExceptionFilter<RpcException> {
+  catch(exception: RpcException, host: ArgumentsHost): Observable<any> {
+    return throwError(() => exception.getError())
+  }
+}
+```
+
+<CalloutInfo type="warning">
+  当你使用[混合应用](/faq/hybrid-application)时，全局微服务异常过滤器默认并不会启用。
+</CalloutInfo>
+
+下面的示例展示了如何手动实例化一个方法作用域（method-scoped）过滤器。与基于 HTTP 的应用类似，你也可以使用控制器作用域（controller-scoped）过滤器（即在控制器类前加上 `@UseFilters()` 装饰器）。
+
+```ts
+@UseFilters(new ExceptionFilter())
+@MessagePattern({ cmd: 'sum' })
+accumulate(data: number[]): number {
+  return (data || []).reduce((a, b) => a + b)
+}
+```
+
+## 继承（Inheritance）
+
+通常情况下，你会根据应用需求，完全自定义异常过滤器。但在某些场景下，你可能只需要扩展**核心异常过滤器（core exception filter）**，并根据特定因素重写其行为。
+
+为了将异常处理委托给基础过滤器，你需要继承 `BaseExceptionFilter`，并调用其继承的 `catch()` 方法。
+
+```ts
+import { Catch, ArgumentsHost } from '@nestjs/common'
+import { BaseRpcExceptionFilter } from '@nestjs/microservices'
+
+@Catch()
+export class AllExceptionsFilter extends BaseRpcExceptionFilter {
+  catch(exception: any, host: ArgumentsHost) {
+    return super.catch(exception, host)
+  }
+}
+```
+
+上面的实现只是一个演示该方法的外壳。你在扩展异常过滤器时，通常会加入符合自身业务需求的**业务逻辑**（如：处理各种条件）。

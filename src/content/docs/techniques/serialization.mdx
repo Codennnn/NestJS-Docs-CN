@@ -1,0 +1,164 @@
+# 序列化
+
+序列化（Serialization）指的是在将对象作为响应发送给客户端之前，对其内容进行转换与清理的过程。在这一阶段，我们可以对响应数据进行加工处理，例如隐藏敏感信息（如密码）或筛选部分字段进行返回。
+
+如果手动完成这些操作，不仅重复劳动、易出错，还难以维护。为此，Nest 提供了一套声明式、可扩展的解决方案，帮助你高效、安全地管理返回数据的结构和内容。
+
+## 核心机制
+
+Nest 内置的 `ClassSerializerInterceptor` 拦截器，基于强大的 [`class-transformer`](https://github.com/typestack/class-transformer) 库，实现了对象序列化的自动化处理。它的工作流程如下：
+
+1. 获取控制器或服务方法的返回值。
+2. 调用 `instanceToPlain()` 方法，将类实例转换为普通对象。
+3. 在转换过程中，自动应用你在类或 DTO 上通过装饰器（如 `@Exclude()`、`@Expose()` 等）定义的转换规则。
+
+这种方式既简洁又灵活，可以极大地提升开发效率和代码可读性。
+
+<CalloutInfo type="warning">
+  对于通过 [`StreamableFile`](/techniques/streaming-files#streamablefile-类)
+  返回的文件流响应，序列化规则不会生效。
+</CalloutInfo>
+
+## 排除属性
+
+在实际开发中，我们通常希望避免将敏感信息（如用户密码）暴露给客户端。`class-transformer` 提供的 `@Exclude()` 装饰器可以帮助我们轻松实现这一目标。假设我们希望在返回用户数据时自动排除 `password` 属性，可以按如下方式编写实体类：
+
+```ts
+import { Exclude } from 'class-transformer'
+
+export class UserEntity {
+  id: number
+  firstName: string
+  lastName: string
+
+  @Exclude()
+  password: string
+
+  constructor(partial: Partial<UserEntity>) {
+    Object.assign(this, partial)
+  }
+}
+```
+
+接下来，我们在控制器中返回该类的实例：
+
+```ts
+import { ClassSerializerInterceptor } from '@nestjs/common'
+
+@UseInterceptors(ClassSerializerInterceptor)
+@Get()
+findOne(): UserEntity {
+  return new UserEntity({
+    id: 1,
+    firstName: 'John',
+    lastName: 'Doe',
+    password: 'password',
+  })
+}
+```
+
+<CalloutInfo type="warning">
+必须返回实体类的**实例**，而不能是普通的 JavaScript 对象（如 `{{ '{ user: new UserEntity() }' }}`）。否则，序列化过程将无法正确识别并应用 `@Exclude()` 等装饰器。
+</CalloutInfo>
+
+当客户端访问该接口时，收到的响应将自动排除 `password` 字段，结果如下所示：
+
+```json
+{
+  "id": 1,
+  "firstName": "John",
+  "lastName": "Doe"
+}
+```
+
+值得一提的是，`ClassSerializerInterceptor` 拦截器不仅可以在控制器中局部使用，也可以应用到整个应用中（详见[绑定拦截器](/interceptors#绑定拦截器)一节）。借助拦截器与实体类的组合，我们可以在全局范围内统一控制响应结构，从而确保所有返回 `UserEntity` 的接口都自动排除了敏感字段。这是一种优雅且集中式的业务规则实现方式。
+
+## 自定义属性暴露
+
+你可以使用 `@Expose()` 装饰器为类属性指定别名，或者将某个计算逻辑以 `getter` 的形式暴露出来。例如：
+
+```ts
+@Expose()
+get fullName(): string {
+  return `${this.firstName} ${this.lastName}`
+}
+```
+
+这段代码会在序列化时，将 `fullName` 属性动态地拼接为 `firstName` 与 `lastName` 的组合。
+
+## 自定义转换逻辑
+
+如果你需要在序列化过程中对属性值进行进一步处理，可以使用 `@Transform()` 装饰器。例如，以下示例中只会返回 `role` 对象中的 `name` 字段，而不会暴露整个对象结构：
+
+```ts
+@Transform(({ value }) => value.name)
+role: RoleEntity
+```
+
+## 配置序列化选项
+
+在某些场景下，你可能希望全局或局部调整序列化行为。此时，可以通过 `@SerializeOptions()` 装饰器传入一个配置对象，用于覆盖默认设置：
+
+```ts
+import { SerializeOptions } from '@nestjs/common'
+
+@SerializeOptions({
+  excludePrefixes: ['_'],
+})
+@Get()
+findOne(): UserEntity {
+  return new UserEntity()
+}
+```
+
+上述代码表示：凡是属性名称以 `_` 开头的字段，在序列化结果中都会被自动排除。这些选项会作为底层 `instanceToPlain()` 方法的第二个参数进行传递。
+
+## 转换普通对象为类实例
+
+你可以在控制器层统一配置序列化逻辑，通过 `@SerializeOptions` 装饰器指定返回类型，确保所有响应 —— 无论是普通对象还是类实例 —— 都会被自动转换为指定的类，并应用类上的装饰器（如 `@Expose()`、`@Transform()` 等）。这种做法可以大大简化代码逻辑，省去频繁手动调用 `plainToInstance()` 或显式实例化类的步骤。
+
+下面的示例展示了如何自动将返回的普通 JavaScript 对象转换为 `UserEntity` 实例：
+
+```ts
+@UseInterceptors(ClassSerializerInterceptor)
+@SerializeOptions({ type: UserEntity })
+@Get()
+findOne(@Query() { id }: { id: number }): UserEntity {
+  if (id === 1) {
+    return {
+      id: 1,
+      firstName: 'John',
+      lastName: 'Doe',
+      password: 'password',
+    }
+  }
+
+  return {
+    id: 2,
+    firstName: 'Kamil',
+    lastName: 'Mysliwiec',
+    password: 'password2',
+  }
+}
+```
+
+无论是哪个分支的返回值，最终都会被自动转换为 `UserEntity` 实例，并应用相应的序列化装饰器（如隐藏 `password` 字段等）。
+
+<CalloutInfo>
+  为控制器指定明确的返回类型（如上例中的 `UserEntity`）还能让 TypeScript
+  发挥其类型检查优势，确保返回数据结构符合 DTO 或实体定义。相比之下，直接调用
+  `plainToInstance()`
+  不会提供这类类型校验机制，可能会掩盖结构不一致的问题，增加调试成本。
+</CalloutInfo>
+
+## 示例参考
+
+想要深入了解序列化的实际应用，可以参考 Nest 官方仓库中的 [21-serializer 示例](https://github.com/nestjs/nest/tree/master/sample/21-serializer)。该示例涵盖了装饰器的使用方式、自动转换逻辑等，能够帮助你更直观地掌握相关概念。
+
+## WebSocket 与微服务中的应用
+
+本章内容主要围绕 HTTP 应用（如 Express 或 Fastify）展开，但值得注意的是，`ClassSerializerInterceptor` 同样适用于 WebSocket 和微服务架构。无论你采用哪种传输协议，都可以正常使用该拦截器，实现统一的数据序列化逻辑。
+
+## 深入阅读
+
+如果你希望了解更多可用的装饰器、转换策略及高级配置项，建议查阅 `class-transformer` 的[官方文档](https://github.com/typestack/class-transformer)，它是 Nest 序列化机制的底层依赖库。

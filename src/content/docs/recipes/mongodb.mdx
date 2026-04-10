@@ -1,0 +1,154 @@
+# Mongoose（MongoDB）
+
+<CalloutInfo type="warning">
+  本文将向你展示如何基于 Mongoose 包，从零开始构建一个自定义
+  `DatabaseModule`。请注意，这种方法会涉及较多的样板代码。作为替代方案，你可以使用官方提供的
+  `@nestjs/mongoose`
+  包来极大地简化这个过程。我们强烈建议你优先考虑使用该包，具体用法请参见[此章节](/techniques/mongodb)。
+</CalloutInfo>
+
+[Mongoose](https://mongoosejs.com) 是目前最流行的 [MongoDB](https://www.mongodb.org/) 对象建模工具。
+
+## 快速开始
+
+首先，安装所需的依赖项：
+
+```ts
+$ npm install mongoose
+```
+
+第一步是使用 `connect()` 方法与数据库建立连接。该方法返回一个 `Promise`，因此需要创建一个[异步提供者](/fundamentals/async-components)。
+
+```ts filename='database.providers.ts'
+import * as mongoose from 'mongoose'
+
+export const databaseProviders = [
+  {
+    provide: 'DATABASE_CONNECTION',
+    useFactory: (): Promise<typeof mongoose> =>
+      mongoose.connect('mongodb://localhost/nest'),
+  },
+]
+```
+
+<CalloutInfo>
+  按照最佳实践，建议将自定义提供者声明在独立的文件中，并以 `.providers.ts`
+  作为文件名后缀。
+</CalloutInfo>
+
+接下来，需要导出这些提供者，以便它们能在应用的其他部分被注入和使用。
+
+```ts filename='database.module.ts'
+import { Module } from '@nestjs/common'
+import { databaseProviders } from './database.providers'
+
+@Module({
+  providers: [...databaseProviders],
+  exports: [...databaseProviders],
+})
+export class DatabaseModule {}
+```
+
+现在，你就可以通过 `@Inject()` 装饰器注入 `Connection` 对象了。Nest 会确保任何依赖于此异步提供者的类，都在 `Promise` 解析完毕后才进行实例化。
+
+## 模型注入（Model injection）
+
+在 Mongoose 中，一切都围绕 [Schema](https://mongoosejs.com/docs/guide.html) 展开。先来定义一个 `CatSchema`：
+
+```ts filename='schemas/cat.schema.ts'
+import * as mongoose from 'mongoose'
+
+export const CatSchema = new mongoose.Schema({
+  name: String,
+  age: Number,
+  breed: String,
+})
+```
+
+`CatSchema` 位于 `cats` 目录，该目录用于存放 `CatsModule` 的所有相关文件。
+
+接着，来创建一个**模型**提供者：
+
+```ts filename='cats.providers.ts'
+import { Connection } from 'mongoose'
+import { CatSchema } from './schemas/cat.schema'
+
+export const catsProviders = [
+  {
+    provide: 'CAT_MODEL',
+    useFactory: (connection: Connection) => connection.model('Cat', CatSchema),
+    inject: ['DATABASE_CONNECTION'],
+  },
+]
+```
+
+<CalloutInfo type="warning">
+  在实际项目中应避免使用**魔法字符串**。建议将 `CAT_MODEL` 和
+  `DATABASE_CONNECTION` 等注入令牌（token）统一放在独立的 `constants.ts`
+  文件中管理。
+</CalloutInfo>
+
+现在，就可以通过 `@Inject()` 装饰器将 `CAT_MODEL` 注入 `CatsService` 了：
+
+```ts filename='cats.service.ts'
+import { Model } from 'mongoose'
+import { Injectable, Inject } from '@nestjs/common'
+import { Cat } from './interfaces/cat.interface'
+import { CreateCatDto } from './dto/create-cat.dto'
+
+@Injectable()
+export class CatsService {
+  constructor(
+    @Inject('CAT_MODEL')
+    private catModel: Model<Cat>
+  ) {}
+
+  async create(createCatDto: CreateCatDto): Promise<Cat> {
+    const createdCat = new this.catModel(createCatDto)
+    return createdCat.save()
+  }
+
+  async findAll(): Promise<Cat[]> {
+    return this.catModel.find().exec()
+  }
+}
+```
+
+在上面的例子中，我们用到了 `Cat` 接口。它继承自 Mongoose 的 `Document` 类型：
+
+```ts filename='interfaces/cat.interface.ts'
+import { Document } from 'mongoose'
+
+export interface Cat extends Document {
+  readonly name: string
+  readonly age: number
+  readonly breed: string
+}
+```
+
+数据库连接是**异步**的，但 Nest 会让这个过程对开发者透明。`CatModel` 的提供者在注入前会等待数据库连接完成，而 `CatsService` 也会相应地延迟实例化，直到模型提供者就绪。整个应用会在所有提供者都完成初始化后才启动。
+
+下面是最终的 `CatsModule`：
+
+```ts filename='cats.module.ts'
+import { Module } from '@nestjs/common'
+import { CatsController } from './cats.controller'
+import { CatsService } from './cats.service'
+import { catsProviders } from './cats.providers'
+import { DatabaseModule } from '../database/database.module'
+
+@Module({
+  imports: [DatabaseModule],
+  controllers: [CatsController],
+  providers: [CatsService, ...catsProviders],
+})
+export class CatsModule {}
+```
+
+<CalloutInfo>
+  <div>不要忘记将 `CatsModule` 导入到根模块（即 `AppModule`）中。</div>
+</CalloutInfo>
+
+## 示例
+
+本章的完整示例可以在[此处](https://github.com/nestjs/nest/tree/master/sample/14-mongoose-base)查看。

@@ -1,0 +1,152 @@
+# SQL（Sequelize）
+
+<CalloutInfo>
+  <div>本章内容仅适用于 TypeScript 用户。</div>
+</CalloutInfo>
+
+<CalloutInfo type="warning">
+  本文将介绍如何基于 **Sequelize** 包，从零开始创建一个自定义的
+  `DatabaseModule`。请注意，这种方式涉及较多手动配置。作为替代方案，你可以使用开箱即用的
+  [`@nestjs/sequelize`
+  包](/techniques/database#sequelize-integration)来大幅简化此过程。
+</CalloutInfo>
+
+[Sequelize](https://github.com/sequelize/sequelize) 是一个流行的 Node.js 对象关系映射器（ORM）。它基于原生 JavaScript 构建，但社区为其提供了一个 TypeScript 封装库：[sequelize-typescript](https://github.com/RobinBuschmann/sequelize-typescript)。该封装库在 Sequelize 的基础上提供了一系列装饰器及其他功能，以便更好地与 TypeScript 集成。
+
+## 快速上手
+
+首先，安装必要的依赖：
+
+```bash
+npm install sequelize sequelize-typescript mysql2
+npm install -D @types/sequelize
+```
+
+第一步是创建一个 `Sequelize` 实例，并将配置对象传递给它的构造函数。然后，将所有模型添加到该实例中（或使用 `modelPaths` 属性指定模型路径），最后调用 `sync()` 方法来同步数据库表结构。
+
+```ts filename='database.providers.ts'
+import { Sequelize } from 'sequelize-typescript'
+import { Cat } from '../cats/cat.entity'
+
+export const databaseProviders = [
+  {
+    provide: 'SEQUELIZE',
+    useFactory: async () => {
+      const sequelize = new Sequelize({
+        dialect: 'mysql',
+        host: 'localhost',
+        port: 3306,
+        username: 'root',
+        password: 'password',
+        database: 'nest',
+      })
+      sequelize.addModels([Cat])
+      await sequelize.sync()
+      return sequelize
+    },
+  },
+]
+```
+
+<CalloutInfo>
+  按照最佳实践，我们通常会将自定义提供者声明在独立的文件中，其文件名以
+  `.providers.ts` 结尾。
+</CalloutInfo>
+
+接下来，我们需要导出这些提供者，以便在应用的其他部分重用它们。
+
+```ts
+import { Module } from '@nestjs/common'
+import { databaseProviders } from './database.providers'
+
+@Module({
+  providers: [...databaseProviders],
+  exports: [...databaseProviders],
+})
+export class DatabaseModule {}
+```
+
+现在，我们就可以通过 `@Inject()` 装饰器注入 `Sequelize` 实例了。任何依赖于这个异步 `Sequelize` 提供者的类，都会等待其 `Promise` 解析完成后才被实例化。
+
+## 模型注入
+
+在 Sequelize 中，**模型**定义了一张数据表，而模型的实例则代表表中的一行数据。首先，我们需要至少定义一个实体（Entity）：
+
+```ts filename='cat.entity.ts'
+import { Table, Column, Model } from 'sequelize-typescript'
+
+@Table
+export class Cat extends Model {
+  @Column
+  name: string
+
+  @Column
+  age: number
+
+  @Column
+  breed: string
+}
+```
+
+`Cat` 实体位于 `cats` 目录下，该目录与 `CatsModule` 相对应。接下来，我们需要为这个实体创建一个**仓库（Repository）** 提供者：
+
+```ts filename='cats.providers.ts'
+import { Cat } from './cat.entity'
+
+export const catsProviders = [
+  {
+    provide: 'CATS_REPOSITORY',
+    useValue: Cat,
+  },
+]
+```
+
+<CalloutInfo type="warning">
+  在实际应用中，应避免使用「魔法字符串」。像 `CATS_REPOSITORY` 和 `SEQUELIZE`
+  这样的注入令牌（token）最好统一存放在一个独立的 `constants.ts` 文件中。
+</CalloutInfo>
+
+Sequelize 通过模型的静态方法来操作数据。因此，我们直接使用 `Cat` 模型类作为 `CATS_REPOSITORY` 提供者的值，这相当于为 `Cat` 模型创建了一个别名。
+
+现在，我们就可以通过 `@Inject()` 装饰器将 `CATS_REPOSITORY` 注入到 `CatsService` 中了：
+
+```ts filename='cats.service.ts'
+import { Injectable, Inject } from '@nestjs/common'
+import { CreateCatDto } from './dto/create-cat.dto'
+import { Cat } from './cat.entity'
+
+@Injectable()
+export class CatsService {
+  constructor(
+    @Inject('CATS_REPOSITORY')
+    private catsRepository: typeof Cat
+  ) {}
+
+  async findAll(): Promise<Cat[]> {
+    return this.catsRepository.findAll<Cat>()
+  }
+}
+```
+
+数据库连接是**异步**的，但 Nest 会让这个过程对开发者透明。`CatsService` 依赖于 `CATS_REPOSITORY` 提供者，而 `CATS_REPOSITORY` 又依赖于异步的数据库连接。Nest 会自动处理这个依赖链，确保 `CatsService` 在数据库连接就绪、仓库提供者可用之后才被实例化。整个应用程序将在所有模块和提供者都成功初始化后才会启动。
+
+下面是最终的 `CatsModule`：
+
+```ts filename='cats.module.ts'
+import { Module } from '@nestjs/common'
+import { CatsController } from './cats.controller'
+import { CatsService } from './cats.service'
+import { catsProviders } from './cats.providers'
+import { DatabaseModule } from '../database/database.module'
+
+@Module({
+  imports: [DatabaseModule],
+  controllers: [CatsController],
+  providers: [CatsService, ...catsProviders],
+})
+export class CatsModule {}
+```
+
+<CalloutInfo>
+  <div>不要忘记在根模块 `AppModule` 中导入 `CatsModule`。</div>
+</CalloutInfo>

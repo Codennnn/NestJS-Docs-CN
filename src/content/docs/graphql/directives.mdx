@@ -1,0 +1,127 @@
+# 指令
+
+指令（Directive）可以附加在字段或片段包含（fragment inclusion）上，并且可以按照服务器的需求以任意方式影响查询的执行（详细内容可参考[这里](https://graphql.org/learn/queries/#directives)）。GraphQL 规范提供了若干默认指令：
+
+- `@include(if: Boolean)` - 仅当参数为 true 时，才在结果中包含该字段
+- `@skip(if: Boolean)` - 当参数为 true 时跳过该字段
+- `@deprecated(reason: String)` - 标记该字段为已弃用，并附带说明信息
+
+指令是以 `@` 字符开头的标识符，后面可以跟一个命名参数列表。指令几乎可以出现在 GraphQL 查询和模式语言（schema language）的任何元素之后。
+
+## 自定义指令
+
+如果你希望 Apollo 或 Mercurius 在遇到你的自定义指令时执行特定操作，可以创建一个转换器函数（transformer function）。该函数会使用 `mapSchema` 方法遍历你的模式（如字段定义、类型定义等），并执行相应的转换。
+
+```ts
+import { getDirective, MapperKind, mapSchema } from '@graphql-tools/utils'
+import { defaultFieldResolver, GraphQLSchema } from 'graphql'
+
+export function upperDirectiveTransformer(
+  schema: GraphQLSchema,
+  directiveName: string
+) {
+  return mapSchema(schema, {
+    [MapperKind.OBJECT_FIELD]: (fieldConfig) => {
+      const upperDirective = getDirective(
+        schema,
+        fieldConfig,
+        directiveName
+      )?.[0]
+
+      if (upperDirective) {
+        const { resolve = defaultFieldResolver } = fieldConfig
+
+        // 替换原有的解析器为一个新函数：
+        // 先调用原解析器，再将结果转换为大写字符串
+        fieldConfig.resolve = async function (source, args, context, info) {
+          const result = await resolve(source, args, context, info)
+          if (typeof result === 'string') {
+            return result.toUpperCase()
+          }
+          return result
+        }
+        return fieldConfig
+      }
+    },
+  })
+}
+```
+
+现在，可以在 `GraphQLModule#forRoot` 方法中，使用 `transformSchema` 选项应用 `upperDirectiveTransformer` 转换函数：
+
+```ts
+GraphQLModule.forRoot({
+  // ...
+  transformSchema: (schema) => upperDirectiveTransformer(schema, 'upper'),
+})
+```
+
+注册后，即可在模式中使用 `@upper` 指令。不过，具体如何应用该指令，取决于你采用的是「代码优先」还是「模式优先」方式。
+
+## 代码优先（Code first）
+
+在代码优先方式中，可以使用 `@Directive()` 装饰器来应用指令。
+
+```ts
+@Directive('@upper')
+@Field()
+title: string
+```
+
+<CalloutInfo>
+
+`@Directive()` 装饰器由 `@nestjs/graphql` 包导出。
+
+</CalloutInfo>
+
+指令可以应用于字段、字段解析器、输入类型和对象类型，以及查询（Query）、变更（Mutation）和订阅（Subscription）。下面是一个在查询处理器（Query Handler）层级应用指令的示例：
+
+```ts
+@Directive('@deprecated(reason: "This query will be removed in the next version")')
+@Query(() => Author, { name: 'author' })
+async getAuthor(@Args({ name: 'id', type: () => Int }) id: number) {
+  return this.authorsService.findOneById(id)
+}
+```
+
+<CalloutInfo type="warning">
+  通过 `@Directive()` 装饰器应用的指令不会反映在生成的模式定义文件（schema
+  definition file）中。
+</CalloutInfo>
+
+最后，请确保在 `GraphQLModule` 中声明指令，示例如下：
+
+```ts
+GraphQLModule.forRoot({
+  // ...,
+  transformSchema: schema => upperDirectiveTransformer(schema, 'upper'),
+  buildSchemaOptions: {
+    directives: [
+      new GraphQLDirective({
+        name: 'upper',
+        locations: [DirectiveLocation.FIELD_DEFINITION],
+      }),
+    ],
+  },
+}),
+```
+
+<CalloutInfo>
+
+`GraphQLDirective` 和 `DirectiveLocation` 都由 `graphql` 包导出。
+
+</CalloutInfo>
+
+## 模式优先（Schema first）
+
+在以模式优先的方法中，可以直接在 SDL 中应用指令。
+
+```graphql
+directive @upper on FIELD_DEFINITION
+
+type Post {
+  id: Int!
+  title: String! @upper
+  votes: Int
+}
+```

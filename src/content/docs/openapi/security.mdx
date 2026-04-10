@@ -1,0 +1,84 @@
+# 安全性
+
+你可以使用 `@ApiSecurity()` 装饰器，为特定的控制器或路由处理函数指定所需的安全机制。
+
+```ts
+@ApiSecurity('basic')
+@Controller('cats')
+export class CatsController {}
+```
+
+在使用此装饰器前，你需要先通过 `DocumentBuilder` 添加对应的安全定义：
+
+```ts
+const options = new DocumentBuilder().addSecurity('basic', {
+  type: 'http',
+  scheme: 'basic',
+})
+```
+
+幸运的是，一些常见的身份验证方案（如 `basic` 和 `bearer`）是内置的，你无需像上面那样手动定义。
+
+## 基础身份验证
+
+要启用基础身份验证，可以使用 `@ApiBasicAuth()` 装饰器。
+
+```ts
+@ApiBasicAuth()
+@Controller('cats')
+export class CatsController {}
+```
+
+然后，通过 `DocumentBuilder` 添加相应的定义：
+
+```ts
+const options = new DocumentBuilder().addBasicAuth()
+```
+
+## Bearer 身份验证
+
+要启用 Bearer 身份验证，可以使用 `@ApiBearerAuth()` 装饰器。
+
+```ts
+@ApiBearerAuth()
+@Controller('cats')
+export class CatsController {}
+```
+
+然后，通过 `DocumentBuilder` 添加相应的定义：
+
+```ts
+const options = new DocumentBuilder().addBearerAuth()
+```
+
+## OAuth2 身份验证
+
+要启用 OAuth2，可以使用 `@ApiOAuth2()` 装饰器，并传入所需的作用域（scopes）。
+
+```ts
+@ApiOAuth2(['pets:write'])
+@Controller('cats')
+export class CatsController {}
+```
+
+然后，通过 `DocumentBuilder` 添加相应的定义：
+
+```ts
+const options = new DocumentBuilder().addOAuth2()
+```
+
+## Cookie 身份验证
+
+要启用 Cookie 身份验证，可以使用 `@ApiCookieAuth()` 装饰器。
+
+```ts
+@ApiCookieAuth()
+@Controller('cats')
+export class CatsController {}
+```
+
+然后，通过 `DocumentBuilder` 添加相应的定义：
+
+```ts
+const options = new DocumentBuilder().addCookieAuth('optional-session-id')
+```

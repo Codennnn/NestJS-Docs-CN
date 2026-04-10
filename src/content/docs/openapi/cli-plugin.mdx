@@ -1,0 +1,342 @@
+# CLI 插件
+
+由于 TypeScript 的元数据反射系统存在一些天然局限，例如：
+
+- 无法在运行时动态获取类中包含哪些属性。
+- 无法区分属性是可选还是必填。
+
+这些限制虽然源于运行时，但通常可以借助 **CLI 插件**在编译阶段加以弥补。Nest 官方就提供了这样一个功能强大的插件，能够在编译期自动生成必要的元数据，帮助你显著减少样板代码，让开发体验更加高效流畅。
+
+<CalloutInfo>
+  该插件是**可选的**：你完全可以继续手动为每个属性添加装饰器，或者只在特定需要的地方启用插件支持。
+</CalloutInfo>
+
+## 概述
+
+启用 Swagger 插件后，Nest 将在编译阶段自动完成以下操作，大幅降低样板代码的数量：
+
+- 为 DTO 属性自动添加 `@ApiProperty()` 装饰器（除非显式使用了 `@ApiHideProperty()` 隐藏该属性）。
+- 根据属性是否可选（例如 `name?: string`），自动设置 `required: false`。
+- 根据 TypeScript 类型推断并生成正确的 `type` 或 `enum` 信息，同时支持数组类型。
+- 根据属性的默认值自动填充 `default` 字段。
+- 若开启 `classValidatorShim` 选项，可结合 `class-validator` 装饰器自动生成校验规则（如 `minimum`、`maximum` 等）。
+- 为控制器中的每个端点自动添加响应装饰器，并准确设置响应状态码及 `type`（响应模型）。
+- 若开启 `introspectComments` 选项，可根据代码注释自动生成 `description` 描述信息。
+- 同样在 `introspectComments` 开启时，可从注释中提取示例值，用于生成 `example` 字段。
+
+请注意：为了让插件正确识别和处理，文件名必须以 `.dto.ts` 或 `.entity.ts` 结尾（例如：`create-user.dto.ts`）。如需使用其他后缀，可通过插件选项 `dtoFileNameSuffix`（详见下文）进行自定义。
+
+在引入插件之前，若想让 Swagger 正确生成 API 文档，通常需要手动为 DTO 的每个属性添加 `@ApiProperty()` 装饰器。
+
+例如，一个简单的 `CreateUserDto` 类可能需要写成这样：
+
+```ts
+export class CreateUserDto {
+  @ApiProperty()
+  email: string
+
+  @ApiProperty()
+  password: string
+
+  @ApiProperty({ enum: RoleEnum, default: [], isArray: true })
+  roles: RoleEnum[] = []
+
+  @ApiProperty({ required: false, default: true })
+  isEnabled?: boolean = true
+}
+```
+
+在小型项目中，这种方式尚可接受；但随着 DTO 数量的增加，手动编写装饰器会变得繁琐且难以维护。
+
+启用 [Swagger 插件](#使用 CLI 插件)后，上述 DTO 可以被大幅简化为：
+
+```ts
+export class CreateUserDto {
+  email: string
+  password: string
+  roles: RoleEnum[] = []
+  isEnabled?: boolean = true
+}
+```
+
+这样就能在保持文档生成完整性的同时，显著减少冗余代码，让开发体验更加高效。
+
+<CalloutInfo>
+Swagger 插件的核心原理是基于**静态分析**：它通过读取 TypeScript 类型信息及 `class-validator` 装饰器，自动推断 `@ApiProperty()` 的各项配置，从而生成准确的 OpenAPI 规范，让 Swagger UI 页面能够清晰直观地展示 API 模型结构。
+
+需要注意的是，插件仅负责文档生成，并不处理运行时校验。因此，像 `IsEmail()`、`IsNumber()` 等 `class-validator` 装饰器仍然必不可少，它们用于在应用运行时校验输入数据的有效性。
+
+</CalloutInfo>
+
+<CalloutInfo>
+  当在 DTO 中使用 `PartialType`、`OmitType` 等
+  [映射类型工具](/openapi/mapped-types) 时，**务必**从 `@nestjs/swagger`
+  包中导入，而不是从 `@nestjs/mapped-types`。只有这样，CLI
+  插件才能正确识别并生成对应的 OpenAPI schema。
+</CalloutInfo>
+
+该插件的工作原理是：基于**抽象语法树**（Abstract Syntax Tree，简称 AST），在编译阶段自动为代码添加所需的装饰器。因此，开发者无需手动在每个属性上都添加 `@ApiProperty()`。
+
+<CalloutInfo>
+  插件会为缺失的 Swagger 属性自动生成默认配置。但如果你需要覆盖或自定义（例如为
+  `string` 类型指定 `format`），只需在属性上显式添加 `@ApiProperty()`
+  并传入自定义配置即可。
+</CalloutInfo>
+
+## 注释自动提取
+
+开启注释自动提取功能后，CLI 插件可自动读取代码中的注释，为属性生成描述与示例（example）值，无需手动重复填写。
+
+例如，假设有如下 `roles` 属性：
+
+```ts
+/**
+ * 用户角色列表
+ * @example ['admin']
+ */
+@ApiProperty({
+  description: `用户角色列表`,
+  example: ['admin'],
+})
+roles: RoleEnum[] = []
+```
+
+通常需要在注释和 `@ApiProperty()` 装饰器中各写一次描述与示例。启用 `introspectComments` 后，CLI 插件会自动提取注释内容并为 `@ApiProperty()` 生成相应的描述与示例。于是代码可简化为：
+
+```ts
+/**
+ * 用户角色列表
+ * @example ['admin']
+ */
+roles: RoleEnum[] = []
+```
+
+此外，插件还提供了 `dtoKeyOfComment` 与 `controllerKeyOfComment` 配置项，可自定义注释映射到装饰器的方式，例如映射到 `@ApiProperty` 或 `@ApiOperation`。
+
+示例如下：
+
+```ts
+export class SomeController {
+  /**
+   * 创建资源
+   */
+  @Post()
+  create() {}
+}
+```
+
+这等同于：
+
+```ts
+@ApiOperation({ summary: '创建资源' })
+@Post()
+create() {}
+```
+
+<CalloutInfo>
+  <div>对于模型类，同样的注释提取机制适用于 `ApiProperty` 装饰器。</div>
+</CalloutInfo>
+
+在控制器中，除 `summary` 外，还可以通过注释添加详细描述（`@remarks`）、标记废弃（`@deprecated`），或声明可能抛出的异常（`@throws`）。例如：
+
+```ts
+/**
+ * 创建新猫咪
+ *
+ * @remarks 此接口用于新增一只猫咪。
+ *
+ * @deprecated
+ * @throws {500} 发生未知错误。
+ * @throws {400} 请求无效。
+ */
+@Post()
+async create(): Promise<Cat> {}
+```
+
+## 使用 CLI 插件
+
+如果你的项目使用了 [Nest CLI](/cli/overview)，可以通过配置 `nest-cli.json` 文件启用该插件。
+
+在文件中添加如下 `plugins` 配置：
+
+```json
+{
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "plugins": ["@nestjs/swagger"]
+  }
+}
+```
+
+### 自定义插件行为
+
+你还可以通过 `options` 属性灵活调整插件的行为。例如：
+
+```json
+{
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@nestjs/swagger",
+        "options": {
+          "classValidatorShim": false,
+          "introspectComments": true,
+          "skipAutoHttpCode": true
+        }
+      }
+    ]
+  }
+}
+```
+
+`options` 对应的接口定义如下：
+
+```ts
+export interface PluginOptions {
+  dtoFileNameSuffix?: string[]
+  controllerFileNameSuffix?: string[]
+  classValidatorShim?: boolean
+  dtoKeyOfComment?: string
+  controllerKeyOfComment?: string
+  introspectComments?: boolean
+  skipAutoHttpCode?: boolean
+  esmCompatible?: boolean
+}
+```
+
+| 选项                       | 默认值                      | 说明                                                                                                               |
+| -------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `dtoFileNameSuffix`        | `['.dto.ts', '.entity.ts']` | 数据传输对象（DTO）文件的后缀名。                                                                                  |
+| `controllerFileNameSuffix` | `.controller.ts`            | 控制器文件的后缀名。                                                                                               |
+| `classValidatorShim`       | `true`                      | 如果设置为 `true`，插件会复用 `class-validator` 的验证装饰器（例如 `@Max(10)` 会在 schema 定义中添加 `max: 10`）。 |
+| `dtoKeyOfComment`          | `'description'`             | 设置 `ApiProperty` 装饰器中，通过注释赋值的属性名。                                                                |
+| `controllerKeyOfComment`   | `'summary'`                 | 设置 `ApiOperation` 装饰器中，通过注释赋值的属性名。                                                               |
+| `introspectComments`       | `false`                     | 如果设置为 `true`，插件会根据 JSDoc 注释自动生成属性的描述和示例。                                                 |
+| `skipAutoHttpCode`         | `false`                     | 禁用在控制器中自动添加 `@HttpCode()` 装饰器。                                                                      |
+| `esmCompatible`            | `false`                     | 如果设置为 `true`，可解决在使用 ESM（`{ "type": "module" }`）时可能出现的语法错误。                                |
+
+每次更新插件选项后，请务必删除 `dist` 目录并重新构建应用。
+
+如果你没有使用 Nest CLI，而是采用了自定义的 `webpack` 配置，也可以将此插件与 `ts-loader` 结合使用：
+
+```js
+getCustomTransformers: (program: any) => ({
+  before: [require('@nestjs/swagger/plugin').before({}, program)]
+}),
+```
+
+## SWC 构建器
+
+在使用 SWC 构建器时，如果你的项目是标准结构（非 Monorepo），需要开启类型检查才能正确使用 CLI 插件。
+具体步骤可参考[类型检查支持](/recipes/swc#类型检查支持)部分的说明。
+
+对于 Monorepo 项目，请参考[多包仓库项目配置](/recipes/swc#多包仓库项目配置)章节中的指导进行设置。
+
+```bash
+$ nest start -b swc --type-check
+```
+
+```bash
+$ npx ts-node src/generate-metadata.ts
+# 或 npx ts-node apps/{YOUR_APP}/src/generate-metadata.ts
+```
+
+### 加载插件元数据
+
+生成元数据文件后，需要在应用启动逻辑中通过 `SwaggerModule.loadPluginMetadata()` 方法加载它，例如：
+
+```ts
+import metadata from './metadata' // <-- 此文件由 "PluginMetadataGenerator" 自动生成
+
+await SwaggerModule.loadPluginMetadata(metadata) // <-- 加载元数据
+const document = SwaggerModule.createDocument(app, config)
+```
+
+这样即可确保在 SWC 模式下也能正常生成和使用 Swagger 文档。
+
+## 与 `ts-jest` 集成（端到端测试）
+
+运行端到端测试时，`ts-jest` 会在内存中即时编译你的源代码。这意味着它不会调用 Nest CLI 的编译器，因此也就不会应用 CLI 插件或执行任何 AST 转换。
+
+要启用插件，你需要在 e2e 测试目录下创建以下文件：
+
+```js
+const transformer = require('@nestjs/swagger/plugin')
+
+module.exports.name = 'nestjs-swagger-transformer'
+// 每当修改下方配置后，务必同步修改版本号，否则 Jest 可能不会应用变更
+module.exports.version = 1
+
+module.exports.factory = (cs) => {
+  return transformer.before(
+    {
+      // @nestjs/swagger/plugin 选项（可为空）
+    },
+    cs.program // 对于 Jest v27 及更早版本，这里应为 "cs.tsCompiler.program"
+  )
+}
+```
+
+文件创建好后，你需要在 `jest` 配置文件中引入这个 AST 转换器。在一个标准的入门项目中，e2e 测试的配置文件通常是 `test/jest-e2e.json`。
+
+如果你使用 `jest@<29` 版本，请参考下面的配置：
+
+```json
+{
+  ... // 其他配置
+  "globals": {
+    "ts-jest": {
+      "astTransformers": {
+        "before": ["<path to the file created above>"]
+      }
+    }
+  }
+}
+```
+
+对于 `jest@^29` 及更高版本，由于 `globals` 配置方式已被废弃，你需要改用 `transform` 字段进行配置：
+
+```json
+{
+  ... // 其他配置
+  "transform": {
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "astTransformers": {
+          "before": ["<path to the file created above>"]
+        }
+      }
+    ]
+  }
+}
+```
+
+## `jest`（端到端测试）故障排查
+
+如果 `jest` 没有正确应用你的配置更改，这通常是因为 Jest **缓存**了旧的构建结果。要让新配置生效，你必须清除 Jest 的缓存目录。
+
+要清除缓存，请在你的 NestJS 项目根目录下运行以下命令：
+
+```bash
+$ npx jest --clearCache
+```
+
+如果上述命令未能解决问题，你还可以通过以下步骤手动删除缓存文件夹：
+
+```bash
+# 1. 查找 Jest 缓存目录（通常位于 /tmp/jest_rs）
+# 在你的 NestJS 项目根目录下运行：
+$ npx jest --showConfig | grep cache
+# 示例输出：
+#   "cache": true,
+#   "cacheDirectory": "/tmp/jest_rs"
+
+# 2. 删除或清空 Jest 缓存目录
+$ rm -rf <cacheDirectory 的值>
+# 示例：
+$ rm -rf /tmp/jest_rs
+```

@@ -1,0 +1,108 @@
+# CLI 与构建脚本
+
+本节将深入介绍 `nest` 命令如何与 TypeScript 编译器及项目脚本协同工作，帮助你理解 Nest 应用的构建与运行流程，为开发环境的管理提供坚实基础。
+
+Nest 应用本质上是一个**标准的 TypeScript 应用**，在执行前需先编译为 JavaScript。尽管编译方式多种多样，Nest 提供了一套开箱即用的工具链，旨在同时满足以下几个核心目标：
+
+- 提供标准化的构建与运行流程：你可以通过 CLI 命令直接执行，默认配置已覆盖大多数使用场景。
+- 保持流程的开放性与灵活性：开发者始终可以访问底层工具，充分利用原生功能和高级配置。
+- 坚持 TypeScript/Node.js 的通用性原则：构建、部署、执行等生命周期都可由你团队自行决定使用哪些外部工具接管。
+
+为了实现这些目标，Nest 通过以下几种技术组件协同工作：nest CLI 命令、本地安装的 TypeScript 编译器，以及 `package.json` 中的 npm 脚本。接下来，我们将详细介绍它们之间如何配合，帮助你掌握 Nest 应用从构建到运行的完整路径，并在有需要时灵活调整这些行为。
+
+## `nest` 命令行工具
+
+`nest` 是一个可在命令行中直接运行的 CLI 工具，具备跨平台的可执行性。它集成了多个子命令，涵盖脚手架生成、编译构建、项目启动等多个环节。我们推荐通过 `package.json` 中自动生成的脚本来调用构建（`nest build`）和启动（`nest start`）命令。
+
+如果你是通过克隆项目而非 `nest new` 创建应用，也可以参考官方的 [TypeScript Starter 仓库](https://github.com/nestjs/typescript-starter)，快速搭建初始开发环境。
+
+## 构建流程
+
+`nest build` 命令是对底层 TypeScript 编译工具的封装。在[标准项目](/cli/overview#项目结构)中，它封装了 tsc（或 swc）；在 [Monorepo 项目](/cli/overview#项目结构)中，则使用 Webpack 与 ts-loader 完成构建。
+
+该命令本身不引入任何额外的编译逻辑，唯一值得注意的是，它内置支持 `tsconfig-paths`，简化了路径别名的解析配置。我们设计 `nest build` 的初衷，是为了让开发者，尤其是初学者，无需直接面对复杂的编译配置（如 `tsconfig.json` 中的各种选项），也能顺利完成项目构建。
+
+更多详情，请参阅 [nest build 命令](/cli/usages#nest-build)文档。
+
+## 启动应用
+
+使用 `nest start` 命令可以启动编译后的 Nest 应用。该命令会先确保项目已成功构建（其行为与 `nest build` 相同），然后以一种简洁、跨平台的方式调用 node 来运行输出文件。
+
+启动流程本质上是对标准 TypeScript 项目的执行封装，因此你可以根据需要定制启动逻辑：既可以使用 `nest start` 提供的选项参数进行配置，也可以完全使用自定义脚本替代它。
+
+详细信息请参考 [nest start 命令](/cli/usages#nest-start)文档。
+
+## 生成器命令
+
+`nest generate` 命令（缩写为 `nest g`）用于生成新的 Nest 项目组件，例如模块、控制器、服务等。它是 Nest CLI 提供的核心功能之一，可以显著提升开发效率。
+
+## 使用包脚本
+
+如果你希望在命令行中直接使用 `nest` 命令，必须先全局安装 Nest CLI。这种方式遵循 npm 的标准行为，但存在一个潜在问题：**全局安装的 CLI 工具不会出现在 `package.json` 的依赖列表中**，因此不同开发者本地可能使用的是不同版本的 Nest CLI，从而带来不一致的问题。
+
+为了解决这个问题，推荐使用项目内的**包脚本**（package scripts）来执行构建和启动命令，并将相关工具添加为**开发依赖**进行版本锁定。
+
+通过 `nest new` 命令或克隆官方 [TypeScript Starter 项目](https://github.com/nestjs/typescript-starter)时，Nest 会自动在 `package.json` 中配置好如下脚本：
+
+```json
+{
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start"
+  }
+}
+```
+
+并同时安装 TypeScript 等必要工具作为开发依赖。
+
+此后，你可以使用以下命令进行构建与启动：
+
+```bash
+npm run build
+npm run start
+```
+
+这些命令会调用项目中本地安装的 Nest CLI，确保所有开发者使用的是一致的工具版本。通过这种方式，你可以更好地管理构建流程的一致性。
+
+<CalloutInfo type="success">
+  使用包脚本代替全局安装 CLI，是团队协作中保持一致性和可维护性的最佳实践。
+</CalloutInfo>
+
+### 特殊情况说明
+
+需要注意的是，`nest build` 和 `nest start` 是日常开发中常用的命令，适合通过包脚本管理。但像 `nest new` 和 `nest generate` 这类命令，通常只在初始化或结构生成阶段使用，因此运行环境可能仍依赖于全局安装。
+
+### 进阶自定义
+
+你也可以通过传递命令行选项（如 `--path`、`--webpack`、`--webpackPath`）对 CLI 行为进行进一步定制，或直接修改底层构建工具的配置（如 `tsconfig.json`、Webpack 配置等）。如果你希望完全绕过 Nest CLI，也可以选择使用 ts-node 或自定义脚本来运行项目，实现更灵活的 TypeScript 执行逻辑。
+
+## 向后兼容性
+
+Nest 本质上是一个基于 TypeScript 的框架，因此旧版本项目中使用的构建或运行脚本依然可以正常使用，并不会因版本升级而强制失效，所以你**无需立即迁移**到新的命令。
+
+当你准备好后，可以选择切换到新版的 `nest build` 和 `nest start` 命令；当然，也可以继续使用你当前的构建脚本或自定义方案。
+
+## 迁移说明
+
+尽管没有强制要求，但如果你希望将项目从传统的工具（如 tsc-watch 或 ts-node）迁移至新版 Nest CLI 命令，只需执行以下步骤：
+
+1. 安装最新版的 CLI 工具（同时全局和项目本地安装）：
+
+```bash
+npm install -g @nestjs/cli
+cd /your/project/root
+npm install -D @nestjs/cli
+```
+
+2. 更新 `package.json` 中的脚本配置，使用标准的 Nest 命令：
+
+```json
+"scripts": {
+  "build": "nest build",
+  "start": "nest start",
+  "start:dev": "nest start --watch",
+  "start:debug": "nest start --debug --watch"
+}
+```
+
+这样即可完成迁移，使用 CLI 提供的统一命令管理项目生命周期，无需额外配置。

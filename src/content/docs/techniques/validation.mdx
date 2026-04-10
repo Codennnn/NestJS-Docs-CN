@@ -1,0 +1,381 @@
+# 数据验证
+
+在 Web 应用开发中，**验证传入数据的合法性始终是一项基本且关键的实践**。为了帮助开发者便捷地对请求数据进行自动校验，Nest 提供了一系列开箱即用的内置管道，包括：
+
+- `ValidationPipe`
+- `ParseIntPipe`
+- `ParseBoolPipe`
+- `ParseArrayPipe`
+- `ParseUUIDPipe`
+
+其中，`ValidationPipe`（验证管道）构建于功能强大的 [`class-validator`](https://github.com/typestack/class-validator) 库之上，支持使用声明式装饰器对数据结构进行精确的验证。通过 `ValidationPipe`，你可以在本地类或数据传输对象（DTO）中定义验证规则，并对来自客户端的请求数据强制执行这些规则。
+
+## 概述
+
+在[管道](/pipes)章节中，我们已经介绍了如何构建自定义管道，并将其应用于控制器、路由处理方法，甚至设为全局管道，从而深入理解其工作机制。如果你尚未阅读该部分，建议先行回顾，以便更好地理解本章内容。
+
+本章将聚焦于 `ValidationPipe` 的实际使用方式，并深入探讨其支持的高级配置与定制化功能。
+
+## 使用内置的 `ValidationPipe`
+
+要启用数据验证功能，首先需要安装必要的依赖包：
+
+```bash
+npm install class-validator class-transformer
+```
+
+`ValidationPipe` 构建于 [`class-validator`](https://github.com/typestack/class-validator) 和 [`class-transformer`](https://github.com/typestack/class-transformer) 两个库之上，这也赋予了它高度的灵活性和丰富的配置能力，你可以通过传入配置对象来自定义其行为。
+
+以下是 `ValidationPipe` 支持的核心选项定义：
+
+```ts
+export interface ValidationPipeOptions extends ValidatorOptions {
+  transform?: boolean
+  disableErrorMessages?: boolean
+  exceptionFactory?: (errors: ValidationError[]) => any
+}
+```
+
+此外，`ValidationPipe` 还继承了 `class-validator` 中的所有配置选项（即 `ValidatorOptions` 接口），常用选项如下表所示：
+
+| 选项                      | 类型       | 说明                                                                   |
+| ------------------------- | ---------- | ---------------------------------------------------------------------- |
+| `enableDebugMessages`     | `boolean`  | 启用调试信息输出，验证失败时将在控制台打印额外的警告信息。             |
+| `skipUndefinedProperties` | `boolean`  | 忽略值为 `undefined` 的属性。                                          |
+| `skipNullProperties`      | `boolean`  | 忽略值为 `null` 的属性。                                               |
+| `skipMissingProperties`   | `boolean`  | 忽略值为 `null` 或 `undefined` 的属性。                                |
+| `whitelist`               | `boolean`  | 启用白名单机制，只保留使用了验证装饰器的属性，其余自动移除。           |
+| `forbidNonWhitelisted`    | `boolean`  | 在启用白名单的基础上，遇到未使用验证装饰器的属性将抛出异常，而非移除。 |
+| `forbidUnknownValues`     | `boolean`  | 若传入未知类型对象，将直接验证失败。                                   |
+| `disableErrorMessages`    | `boolean`  | 关闭详细错误信息的输出，返回异常时将不包含验证失败的具体信息。         |
+| `errorHttpStatusCode`     | `number`   | 指定验证失败时抛出的 HTTP 状态码，默认使用 `BadRequestException`。     |
+| `exceptionFactory`        | `Function` | 自定义异常工厂函数，可根据验证错误数组生成自定义异常对象。             |
+| `groups`                  | `string[]` | 启用验证分组，仅验证匹配当前组的装饰器。                               |
+| `always`                  | `boolean`  | 设置装饰器的 `always` 默认值，可用于强制启用某些验证逻辑。             |
+| `strictGroups`            | `boolean`  | 启用严格分组模式，仅当提供有效的 `groups` 时才验证包含分组的规则。     |
+| `dismissDefaultMessages`  | `boolean`  | 忽略默认的错误消息，未显式设置时，错误消息为 `undefined`。             |
+| `validationError.target`  | `boolean`  | 是否在 `ValidationError` 中包含目标对象。                              |
+| `validationError.value`   | `boolean`  | 是否在 `ValidationError` 中包含验证失败的原始值。                      |
+| `stopAtFirstError`        | `boolean`  | 启用后，遇到第一个验证失败项时将立即停止验证流程。默认为 `false`。     |
+
+<CalloutInfo>
+  如需了解更多 `class-validator`
+  的高级功能与使用方法，请参考其[官方文档](https://github.com/typestack/class-validator)。
+</CalloutInfo>
+
+## 自动验证
+
+在 Nest 应用中，我们可以通过全局注册 `ValidationPipe` 来启用自动验证功能，从而在控制器层统一拦截并拒绝所有不符合规范的入参。
+
+```ts filename='main.ts'
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule)
+
+  app.useGlobalPipes(new ValidationPipe())
+}
+```
+
+此举确保所有接收到的请求数据都会被自动验证，无需在每个控制器中显式添加验证逻辑。
+
+为了验证效果，我们可以定义一个简单的创建用户接口：
+
+```ts
+@Post()
+create(@Body() createUserDto: CreateUserDto) {
+  return '创建一个新用户'
+}
+```
+
+请注意，TypeScript 在运行时不会保留泛型或接口的类型信息。因此，在 DTO 中使用接口或类型别名时，`ValidationPipe` 将无法执行验证，建议始终使用具体的类来定义 DTO。
+
+<CalloutInfo type="warning">
+  另一个常见陷阱是只使用 `type-only` 的导入语法（如 `import type {CreateUserDto}
+  `），这类导入会在编译后被完全移除，导致验证失效。请始终使用普通的导入方式（`import{' '}
+  {CreateUserDto}`）来引入 DTO。
+</CalloutInfo>
+
+接下来，在 `CreateUserDto` 类中添加具体的验证规则。这些规则由 `class-validator` 提供的装饰器实现，详细可参考[官方文档](https://github.com/typestack/class-validator#validation-decorators)。
+
+```ts
+import { IsEmail, IsNotEmpty } from 'class-validator'
+
+export class CreateUserDto {
+  @IsEmail()
+  email: string
+
+  @IsNotEmpty()
+  password: string
+}
+```
+
+启用验证后，当客户端发送非法参数（如无效的 `email`）时，框架会自动返回 `400 Bad Request`，响应体大致如下：
+
+```json
+{
+  "statusCode": 400,
+  "error": "Bad Request",
+  "message": ["email must be an email"]
+}
+```
+
+不仅限于请求体，`ValidationPipe` 同样可以用于验证请求参数（如路径参数、查询参数等）。例如，如果我们希望只允许数字类型的路径参数 `:id`，可以如下处理：
+
+```ts
+@Get(':id')
+findOne(@Param() params: FindOneParams) {
+  return '返回指定用户信息'
+}
+```
+
+其中的 `FindOneParams` 也是一个使用类定义的校验对象：
+
+```ts
+import { IsNumberString } from 'class-validator'
+
+export class FindOneParams {
+  @IsNumberString()
+  id: string
+}
+```
+
+通过这种方式，Nest 会在路由处理前自动验证参数格式，避免非法请求进入业务逻辑层。
+
+## 关闭详细错误信息
+
+在开发阶段，详细的错误信息有助于快速定位问题。然而，在生产环境中，出于安全或用户体验的考虑，通常建议关闭这些详细提示。
+
+你可以在创建 `ValidationPipe` 时传入配置项 `disableErrorMessages: true` 来实现这一目的。例如：
+
+```ts
+app.useGlobalPipes(
+  new ValidationPipe({
+    disableErrorMessages: true,
+  })
+)
+```
+
+配置完成后，响应中将不再返回具体的验证错误详情，只保留简化信息，从而避免敏感数据泄露或过多技术细节暴露给前端用户。
+
+## 属性剥离
+
+`ValidationPipe` 支持自动剔除那些不应被处理器接收的多余属性。通过启用「白名单」功能（`whitelist`），只允许验证类中明确声明的属性通过，所有未列入白名单的属性都会被自动移除。举例来说，如果接口期望接收 `email` 和 `password` 两个字段，但请求中还包含了 `age`，则 `age` 会被自动从最终的数据对象中剔除。开启方式如下：
+
+```ts
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,
+  })
+)
+```
+
+启用后，所有未在 DTO 类中通过装饰器声明的属性都会被过滤掉，避免意外接收或注入无效数据。
+
+此外，你还可以结合 `forbidNonWhitelisted` 选项，当请求中包含非白名单属性时，直接拒绝请求并返回错误响应：
+
+```ts
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  })
+)
+```
+
+这样可以增强接口的严谨性，避免客户端传递多余或非法字段。
+
+## 请求载荷对象转换
+
+通过网络传输的请求载荷通常是普通的 JavaScript 对象。`ValidationPipe` 提供自动类型转换功能，可以将这些普通对象转换为对应的数据传输对象实例。要启用此功能，只需将 `transform` 选项设置为 `true`。可在方法级别配置：
+
+```ts filename='cats.controller.ts'
+@Post()
+@UsePipes(new ValidationPipe({ transform: true }))
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto)
+}
+```
+
+或者在全局管道中统一开启：
+
+```ts
+app.useGlobalPipes(
+  new ValidationPipe({
+    transform: true,
+  })
+)
+```
+
+开启自动转换后，除了将普通对象转换为 DTO 实例，`ValidationPipe` 还会对基础类型（如 `number`、`boolean` 等）进行自动转换。比如下面示例中，`findOne` 方法接收的 `id` 是路径参数，默认传入时为字符串，但开启转换后会自动转为数字类型：
+
+```ts
+@Get(':id')
+findOne(@Param('id') id: number) {
+  console.log(typeof id === 'number') // true
+  return '返回指定用户信息'
+}
+```
+
+默认情况下，路径参数和查询参数均为字符串类型。通过设置 `transform: true`，NestJS 会根据方法签名中的类型声明，将字符串自动转换成对应的类型，简化了手动转换的繁琐工作。
+
+## 显式类型转换
+
+前文介绍了 `ValidationPipe` 在开启自动转换时，如何根据方法参数的类型声明，自动将路径参数和查询参数转换为对应类型。
+
+如果未启用自动转换，或者需要更灵活的转换控制，也可以通过显式管道实现类型转换。例如，NestJS 提供了内置的 `ParseIntPipe` 和 `ParseBoolPipe`，用于将字符串参数转换为数字和布尔值。一般不需要使用 `ParseStringPipe`，因为默认情况下，路径参数和查询参数本身就是字符串类型。
+
+示例代码如下：
+
+```ts
+import { ParseIntPipe, ParseBoolPipe } from '@nestjs/common'
+
+@Get(':id')
+findOne(
+  @Param('id', ParseIntPipe) id: number,
+  @Query('sort', ParseBoolPipe) sort: boolean,
+) {
+  console.log(typeof id === 'number') // true
+  console.log(typeof sort === 'boolean') // true
+  return '返回指定用户信息'
+}
+```
+
+通过显式使用解析管道，能够确保参数类型的正确转换和验证，提升接口的健壮性。
+
+## 映射类型
+
+在实现 CRUD（创建、读取、更新、删除）功能时，我们常常需要基于某个基础实体类型，派生出多个变体。Nest 提供了一系列实用的类型映射工具函数，帮助你高效地转换和复用类型，减少重复代码。
+
+<CalloutInfo>
+如果你的项目中使用了 `@nestjs/swagger`，请参考 [Swagger 映射类型](/openapi/mapped-types)章节获取更详细的说明；如果使用了 `@nestjs/graphql`，则请查看 [GraphQL 映射类型](/graphql/mapped-types)章节。
+
+这两个包都深度依赖 TypeScript 类型系统，导入方式和使用细节有所不同。如果直接使用 `@nestjs/mapped-types`（而非根据项目类型选择对应的包），可能会引发各种未记录的副作用，请谨慎使用。
+
+</CalloutInfo>
+
+### 常见场景：基于同一类型生成 Create 和 Update DTO
+
+在构建输入验证 DTO 时，通常会针对同一个基础类型分别定义「创建（Create）」和「更新（Update）」版本。
+举例来说，创建 DTO 中的字段通常都是必填，而更新 DTO 中的字段则通常是可选的。
+
+Nest 提供了 `PartialType()` 工具函数，帮你自动将所有属性转换为可选，从而极大简化更新 DTO 的编写，避免冗余的模板代码。
+
+```ts filename='cats.dto.ts'
+export class CreateCatDto {
+  name: string
+  age: number
+  breed: string
+}
+```
+
+默认情况下，以上 DTO 的所有字段都是必填。使用 `PartialType()` 后，所有属性都会变成可选：
+
+```ts
+import { PartialType } from '@nestjs/mapped-types'
+
+export class UpdateCatDto extends PartialType(CreateCatDto) {}
+```
+
+### 选择部分属性：`PickType()`
+
+`PickType()` 用于从已有类型中挑选指定字段，创建一个新类型。例如，从 `CreateCatDto` 中只选取 `age` 字段：
+
+```ts
+import { PickType } from '@nestjs/mapped-types'
+
+export class UpdateCatAgeDto extends PickType(CreateCatDto, ['age'] as const) {}
+```
+
+### 排除指定属性：`OmitType()`
+
+`OmitType()` 则相反，是从已有类型中排除某些字段，构造新类型。例如，排除 `name` 字段，生成一个新的 DTO：
+
+```ts
+import { OmitType } from '@nestjs/mapped-types'
+
+export class UpdateCatDto extends OmitType(CreateCatDto, ['name'] as const) {}
+```
+
+### 合并多个类型：`IntersectionType()`
+
+当需要将多个类型合并成一个包含所有字段的新类型时，使用 `IntersectionType()`：
+
+```ts
+import { IntersectionType } from '@nestjs/mapped-types'
+
+export class AdditionalCatInfo {
+  color: string
+}
+
+export class UpdateCatDto extends IntersectionType(
+  CreateCatDto,
+  AdditionalCatInfo
+) {}
+```
+
+### 组合使用映射类型
+
+这些工具函数可以灵活组合应用，比如下面的写法：
+
+```ts
+import { PartialType, OmitType } from '@nestjs/mapped-types'
+
+export class UpdateCatDto extends PartialType(
+  OmitType(CreateCatDto, ['name'] as const)
+) {}
+```
+
+此处先排除 `name` 字段，再将剩余字段全部设为可选，生成了一个符合需求的更新 DTO。
+
+## 解析与验证数组
+
+在 TypeScript 中，泛型和接口的元数据不会在运行时保留。这意味着，当你在 DTO 中使用它们时，Nest 提供的 `ValidationPipe` 可能无法对数组中的每一项进行正确验证。例如，以下代码中的 `createUserDtos` 数组并不会被有效校验：
+
+```ts
+@Post()
+createBulk(@Body() createUserDtos: CreateUserDto[]) {
+  return '创建一批新用户'
+}
+```
+
+为了解决这一问题，你可以选择以下两种方式对数组进行验证：
+
+1. **创建包装类**：将数组作为属性嵌套在一个新的类中。
+2. **使用内置管道 `ParseArrayPipe`**：这是更简洁直接的方式。
+
+下面是使用 `ParseArrayPipe` 的示例：
+
+```ts
+@Post()
+createBulk(
+  @Body(new ParseArrayPipe({ items: CreateUserDto }))
+  createUserDtos: CreateUserDto[],
+) {
+  return '创建一批新用户'
+}
+```
+
+`ParseArrayPipe` 同样适用于查询参数的解析和验证。例如，假设我们有一个 `findByIds()` 方法，用于根据查询参数中的多个 ID 查找用户：
+
+```ts
+@Get()
+findByIds(
+  @Query('ids', new ParseArrayPipe({ items: Number, separator: ',' }))
+  ids: number[],
+) {
+  return '根据提供的 ID 返回对应的用户列表'
+}
+```
+
+此写法支持将 `ids` 参数以逗号分隔的形式传入，并对其进行类型转换与验证。例如：
+
+```bash
+GET /?ids=1,2,3
+```
+
+## WebSocket 与微服务中的验证管道
+
+尽管本章主要以基于 HTTP 的应用（如使用 Express 或 Fastify）为例进行讲解，但无论采用何种传输协议，`ValidationPipe` 都同样适用于 WebSocket 通信和微服务架构。其在数据验证方面的工作机制保持一致，确保传入数据的结构与类型符合预期。
+
+## 延伸阅读
+
+如果你希望深入了解如何自定义验证器、配置错误消息，或使用 `class-validator` 包中提供的各种装饰器功能，建议参考其[官方文档](https://github.com/typestack/class-validator)。

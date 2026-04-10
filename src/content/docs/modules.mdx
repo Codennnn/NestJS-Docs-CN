@@ -1,0 +1,336 @@
+# 模块
+
+**模块**（Module）是通过 `@Module()` 装饰器标记的类，用于承载应用的结构单元。装饰器中定义的元数据能够指导 Nest 有效组织各类组件，并协调它们之间的依赖关系。
+
+```mermaid
+graph TD
+    A["@Module() 装饰器"] --> B["模块配置对象"]
+
+    B --> C["providers<br/>提供者数组"]
+    B --> D["controllers<br/>控制器数组"]
+    B --> E["imports<br/>导入模块数组"]
+    B --> F["exports<br/>导出提供者数组"]
+
+    C --> G["CatsService<br/>业务逻辑服务"]
+    C --> H["DatabaseService<br/>数据库服务"]
+    C --> I["ConfigService<br/>配置服务"]
+
+    D --> J["CatsController<br/>HTTP 路由控制器"]
+    D --> K["UsersController<br/>用户控制器"]
+
+    E --> L["CommonModule<br/>通用模块"]
+    E --> M["DatabaseModule<br/>数据库模块"]
+
+    F --> N["对外暴露的服务<br/>供其他模块使用"]
+
+    G --> O["依赖注入<br/>DI Container"]
+    H --> O
+    I --> O
+
+    O --> P["模块实例<br/>Singleton"]
+```
+
+每个 Nest 应用至少包含一个模块，即**根模块**（Root Module），它是整个**应用图**（Application Graph）的起点。应用图用于描述模块之间，以及模块与其提供者之间的依赖关系。
+
+对于小型项目，仅使用一个根模块通常已足够，但在实际开发中，我们更倾向于按功能将应用拆分为多个模块。Nest **强烈推荐**使用模块来组织应用结构，以提高代码的可维护性和应用的可扩展性。通常，每个模块应封装一组职责相关、功能紧密的组件。
+
+在定义模块时，`@Module()` 装饰器需要传入一个配置对象，用于告知 Nest 如何组织该模块。这个对象包含以下常用选项：
+
+| 属性          | 描述                                                                                                                                |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `providers`   | 当前模块中定义的**提供者**数组，由 Nest 的依赖注入容器实例化，默认仅在该模块中可用。                                                |
+| `controllers` | 当前模块中定义的**控制器**数组，由 Nest 自动实例化并处理传入请求。                                                                  |
+| `imports`     | 当前模块所依赖的**其他模块**数组，用于引入它们导出的提供者。                                                                        |
+| `exports`     | 当前模块中希望**对外共享**的提供者，可供导入该模块的其他模块使用。可以导出提供者本身，也可以导出其对应的令牌（即 `provide` 的值）。 |
+
+需要特别注意的是，**模块默认封装其内部注册的提供者**。换句话说，模块中的提供者在外部模块中默认是不可访问的，除非显式通过 `exports` 导出。被导出的提供者构成了模块的**公共接口**，也是模块之间实现依赖共享的重要桥梁。
+
+## 功能模块
+
+在本示例中，`CatsController` 与 `CatsService` 同属于「猫」这一业务领域，二者职责相关、协作紧密。因此，将它们封装为一个独立的**功能模块**（Feature Module），是一种合理且被官方推荐的架构方式。
+
+功能模块的核心作用是将相关功能的代码组织在一起，从而建立清晰的模块边界，提升内聚性。随着应用规模的扩大以及协作复杂度的提升，模块化结构的优势将愈加明显，同时也契合 SOLID 原则中所强调的**高内聚**、**低耦合**的设计理念。
+
+接下来，我们将创建一个名为 `CatsModule` 的功能模块，并在其中整合控制器和服务：
+
+```ts filename='cats/cats.module.ts'
+import { Module } from '@nestjs/common'
+import { CatsController } from './cats.controller'
+import { CatsService } from './cats.service'
+
+@Module({
+  controllers: [CatsController],
+  providers: [CatsService],
+})
+export class CatsModule {
+  // 可选：可在此添加模块级的初始化逻辑
+}
+```
+
+<CalloutInfo>
+  你可以通过命令行快速生成模块结构：`nest g module cats`。
+</CalloutInfo>
+
+如上所示，我们在 `cats.module.ts` 文件中定义了 `CatsModule`，并在其中注册了相关的控制器和服务。为了保持项目结构清晰、便于维护，建议将这些文件统一放置在 `cats` 目录下。
+
+接下来，我们还需要在应用的根模块中导入该功能模块，以完成模块的集成：
+
+```ts filename='app.module.ts'
+import { Module } from '@nestjs/common'
+import { CatsModule } from './cats/cats.module'
+
+@Module({
+  imports: [CatsModule],
+})
+export class AppModule {}
+```
+
+此时，项目的目录结构将大致如下所示：
+
+<FileTree
+  data={[
+    {
+      name: 'src',
+      children: [
+        {
+          name: 'cats',
+          children: [
+            { name: 'dto', children: [{ name: 'create-cat.dto.ts' }] },
+            { name: 'interfaces', children: [{ name: 'cat.interface.ts' }] },
+            { name: 'cats.controller.ts' },
+            { name: 'cats.module.ts' },
+            { name: 'cats.service.ts' },
+          ],
+        },
+        { name: 'app.module.ts' },
+        { name: 'main.ts' },
+      ],
+    },
+  ]}
+/>
+
+## 共享模块与服务复用
+
+在 NestJS 中，模块默认以**单例模式**（Singleton）工作。这意味着，同一个服务实例在多个模块之间可以共享，无需重复创建，从而提高资源利用效率并简化依赖管理。
+
+```mermaid
+graph TD
+    subgraph "应用模块架构"
+        A["AppModule<br/>根模块"]
+
+        subgraph "功能模块"
+            B["UsersModule<br/>用户模块"]
+            C["OrdersModule<br/>订单模块"]
+            D["ChatModule<br/>聊天模块"]
+        end
+
+        subgraph "共享层"
+            E["SharedModule<br/>共享模块"]
+            F["DatabaseService<br/>数据库服务"]
+            G["LoggerService<br/>日志服务"]
+            H["ConfigService<br/>配置服务"]
+        end
+    end
+
+    A -->|imports| B
+    A -->|imports| C
+    A -->|imports| D
+    A -->|imports| E
+
+    B -->|imports & uses| E
+    C -->|imports & uses| E
+    D -->|imports & uses| E
+
+    E -->|exports| F
+    E -->|exports| G
+    E -->|exports| H
+
+    B -.->|共享同一实例| F
+    C -.->|共享同一实例| F
+    D -.->|共享同一实例| F
+
+    B -.->|共享同一实例| G
+    C -.->|共享同一实例| G
+    D -.->|共享同一实例| G
+
+    B -.->|共享同一实例| H
+    C -.->|共享同一实例| H
+    D -.->|共享同一实例| H
+
+    subgraph "单例模式说明"
+        I["所有模块共享<br/>同一个服务实例"]
+        J["节省内存资源"]
+        K["状态保持一致"]
+    end
+```
+
+实际上，Nest 中的每个模块本质上都是**共享模块**：只要被其他模块导入，就可以复用其导出的服务实例。
+
+例如，如果我们希望在多个模块中复用同一个 `CatsService` 实例，需要先将其添加到模块的 `exports` 数组中：
+
+```ts filename='cats.module.ts'
+import { Module } from '@nestjs/common'
+import { CatsController } from './cats.controller'
+import { CatsService } from './cats.service'
+
+@Module({
+  controllers: [CatsController],
+  providers: [CatsService],
+  exports: [CatsService], // 导出 CatsService，供其他模块复用
+})
+export class CatsModule {}
+```
+
+这样一来，任何导入了 `CatsModule` 的模块都可以直接注入 `CatsService`，并共享同一个服务实例。
+
+反之，如果在每个使用场景中都单独注册一次 `CatsService`，虽然在功能上依然可用，但每个模块都会创建一个独立实例。这不仅增加了内存开销，还可能导致服务状态不一致等问题。
+
+通过将服务封装在模块中并显式导出，Nest 提供了一种清晰、可控的服务共享机制。所有依赖该模块的地方都会复用同一个实例，从而实现资源复用、状态一致，充分体现了 NestJS 在模块化架构与依赖注入机制方面的强大优势。
+
+## 模块的重新导出
+
+如前所述，模块不仅可以导出自身定义的提供者，还可以**重新导出其导入的其他模块**。这种机制在构建模块聚合（Module Aggregation）时尤为有用。
+
+例如，`CoreModule` 如果导入了 `CommonModule`，并在其 `exports` 数组中将其重新导出，那么任何导入 `CoreModule` 的模块，都将自动拥有 `CommonModule` 提供的服务和功能，无需再次单独引入：
+
+```ts
+@Module({
+  imports: [CommonModule],
+  exports: [CommonModule],
+})
+export class CoreModule {}
+```
+
+这种方式有助于构建更清晰、可复用的模块边界，尤其适用于基础设施类模块的封装与共享。
+
+## 模块中的依赖注入
+
+除了在模块元数据中注册控制器和提供者外，还可以通过模块类的构造函数注入所需的依赖，例如用于读取配置或执行初始化逻辑。
+
+```ts filename='cats.module.ts'
+import { Module } from '@nestjs/common'
+import { CatsController } from './cats.controller'
+import { CatsService } from './cats.service'
+
+@Module({
+  controllers: [CatsController],
+  providers: [CatsService],
+})
+export class CatsModule {
+  constructor(private catsService: CatsService) {}
+}
+```
+
+需要注意的是：**模块类本身并不会作为提供者参与依赖注入体系**，因此无法被注入到其他类中。尝试这样做不仅无效，还可能引发[循环依赖](/fundamentals/circular-dependency)的问题，应当避免。
+
+## 使用全局模块
+
+在 Nest 项目中，如果你需要在多个模块间复用某些依赖，频繁地在 `imports` 中手动引入同一个模块会显得繁琐。与 Angular 不同，Nest 中的 `providers` 默认只在声明它们的模块作用域内可用，并不会自动暴露给全局。这意味着：只有将某个模块显式加入当前模块的 `imports` 数组，才能访问其导出的提供者。
+
+这种**按需引入**的机制有助于保持模块边界清晰，避免全局作用域被过度污染，也降低了隐式依赖带来的维护成本。
+
+但在实际开发中，也存在一些确实需要在全局范围内使用的服务（如工具类、数据库连接等）。针对这类场景，Nest 提供了 `@Global()` 装饰器，用于将模块声明为**全局模块**（Global Module），使其提供的依赖可以在任意模块中直接注入，无需手动导入。
+
+```ts
+import { Module, Global } from '@nestjs/common'
+import { CatsController } from './cats.controller'
+import { CatsService } from './cats.service'
+
+@Global()
+@Module({
+  controllers: [CatsController],
+  providers: [CatsService],
+  exports: [CatsService],
+})
+export class CatsModule {}
+```
+
+通过 `@Global()` 装饰器标记后，`CatsModule` 会被注册到全局作用域，其导出的 `CatsService` 也会自动成为全局提供者。其他模块无需在 `imports` 中显式引入 `CatsModule`，即可直接注入并使用 `CatsService`。
+
+<CalloutInfo type="warning" title="谨慎使用全局模块">
+  虽然全局模块能减少重复导入的样板代码，但更推荐的做法是按需引入所需模块，并通过
+  `exports` 显式暴露其
+  API。这样可以保持模块之间的清晰边界，避免产生不必要的耦合，从而提升项目的可维护性。
+</CalloutInfo>
+
+## 动态模块配置
+
+Nest 提供了强大的**动态模块机制**（Dynamic Modules），允许我们在运行时灵活地配置模块的内容。它特别适用于根据传入参数或配置项**动态创建提供者**的场景，能够显著提升模块的适应性。
+
+下面将介绍其基本用法。
+
+```ts
+import { Module, DynamicModule } from '@nestjs/common'
+import { createDatabaseProviders } from './database.providers'
+import { Connection } from './connection.provider'
+
+@Module({
+  providers: [Connection],
+  exports: [Connection],
+})
+export class DatabaseModule {
+  static forRoot(entities = [], options?): DynamicModule {
+    const providers = createDatabaseProviders(options, entities)
+
+    return {
+      module: DatabaseModule,
+      providers: providers,
+      exports: providers,
+    }
+  }
+}
+```
+
+<CalloutInfo>
+  `forRoot()` 方法既可以返回同步的动态模块对象，也支持返回
+  `Promise`，从而满足异步配置的需求。
+</CalloutInfo>
+
+在上述示例中，模块通过 `@Module()` 装饰器**静态注册**了一个名为 `Connection` 的提供者。与此同时，`forRoot()` 方法会根据传入的 `entities` 和 `options` 参数**动态生成一组提供者**（例如用于数据库访问的仓储类等）。
+
+需要特别注意的是，`forRoot()` 返回的配置对象是对原始模块元数据的**扩展**，而非完全替换。这意味着，`Connection` 以及动态生成的提供者会**共同作为导出成员**，供其他模块引入使用。
+
+若希望将该动态模块注册为全局模块，只需在返回对象中添加 `global: true` 属性：
+
+```ts
+{
+  global: true,
+  module: DatabaseModule,
+  providers: providers,
+  exports: providers,
+}
+```
+
+模块的导入和配置方式如下：
+
+```ts
+import { Module } from '@nestjs/common'
+import { DatabaseModule } from './database/database.module'
+import { User } from './users/entities/user.entity'
+
+@Module({
+  imports: [DatabaseModule.forRoot([User])],
+})
+export class AppModule {}
+```
+
+如果需要在其他模块中重新导出此动态模块，可以直接在 `exports` 中添加模块本身，而无需再次调用 `forRoot()`：
+
+```ts
+import { Module } from '@nestjs/common'
+import { DatabaseModule } from './database/database.module'
+import { User } from './users/entities/user.entity'
+
+@Module({
+  imports: [DatabaseModule.forRoot([User])],
+  exports: [DatabaseModule],
+})
+export class AppModule {}
+```
+
+更多内容请参阅[动态模块](/fundamentals/dynamic-modules)一章，以及官方提供的[示例项目](https://github.com/nestjs/nest/tree/master/sample/25-dynamic-modules)。
+
+<CalloutInfo>
+  想进一步构建更具灵活性和可定制性的模块？请参考[构建可配置模块](/fundamentals/dynamic-modules#构建可配置模块configurablemodulebuilder)章节，了解如何使用
+  `ConfigurableModuleBuilder`。
+</CalloutInfo>

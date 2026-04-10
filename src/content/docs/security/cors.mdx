@@ -1,0 +1,29 @@
+# 跨源资源共享
+
+**跨源资源共享**（Cross-Origin Resource Sharing，简称 CORS）是一种基于 HTTP 头的机制，它允许服务器声明哪些外部源可以访问其资源。这对于前后端分离的 Web 应用来说尤为重要，能够避免因浏览器的同源策略而导致的请求受阻。
+
+在 Nest 中，CORS 的处理依赖于所选的底层 HTTP 平台：
+
+- 若使用 Express，则由 [cors](https://github.com/expressjs/cors) 中间件提供支持。
+- 若使用 Fastify，则使用的是 [@fastify/cors](https://github.com/fastify/fastify-cors) 插件。
+
+这两个库都支持丰富的配置项，可根据实际需求灵活调整，以实现精细化的跨域控制。
+
+## 快速上手
+
+在 Nest 应用中启用 CORS 非常简单，只需调用 `app.enableCors()` 方法即可：
+
+```ts
+const app = await NestFactory.create(AppModule)
+app.enableCors()
+```
+
+该方法支持一个可选的配置对象，允许你根据需求定制跨域行为。所有可用选项请参考 [CORS 官方配置文档](https://github.com/expressjs/cors#configuration-options)。此外，你还可以传入一个[异步回调函数](https://github.com/expressjs/cors#configuring-cors-asynchronously)，根据每个请求动态地生成配置。
+
+另一种方式是：在创建应用时通过 `NestFactory.create()` 的第二个参数启用 CORS。将 `cors` 字段设为 `true` 即可启用默认配置；如需自定义，也可传入配置对象或回调函数：
+
+```ts
+const app = await NestFactory.create(AppModule, {
+  cors: true, // 或传入配置对象 / 回调函数
+})
+```

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景 -->
+  <rect width="400" height="300" fill="#f3f4f6" />
+
+  <!-- 边框 -->
+  <rect x="10" y="10" width="380" height="280" fill="none" stroke="#ef4444" stroke-width="3" />
+
+  <!-- 主图标 -->
+  <circle cx="200" cy="80" r="25" fill="#ef4444" />
+  <text
+    x="200"
+    y="90"
+    text-anchor="middle"
+    fill="white"
+    font-family="Arial, sans-serif"
+    font-size="30"
+    font-weight="bold"
+  >
+    🚫
+  </text>
+
+  <!-- 主标题 -->
+  <text
+    x="200"
+    y="130"
+    text-anchor="middle"
+    fill="#ef4444"
+    font-family="Arial, sans-serif"
+    font-size="24"
+    font-weight="bold"
+  >
+    资源保护
+  </text>
+
+  <!-- 英文标题 -->
+  <text
+    x="200"
+    y="155"
+    text-anchor="middle"
+    fill="#374151"
+    font-family="Arial, sans-serif"
+    font-size="16"
+  >
+    Hotlink Protection
+  </text>
+
+  <!-- 说明文字 -->
+  <text
+    x="200"
+    y="185"
+    text-anchor="middle"
+    fill="#6b7280"
+    font-family="Arial, sans-serif"
+    font-size="14"
+  >
+    此图片受到版权保护
+  </text>
+  <text
+    x="200"
+    y="205"
+    text-anchor="middle"
+    fill="#6b7280"
+    font-family="Arial, sans-serif"
+    font-size="14"
+  >
+    This image is copyright protected
+  </text>
+
+  <!-- 网站信息 -->
+  <text
+    x="200"
+    y="240"
+    text-anchor="middle"
+    fill="#059669"
+    font-family="Arial, sans-serif"
+    font-size="16"
+    font-weight="bold"
+  >
+    NestJS 中文文档
+  </text>
+  <text
+    x="200"
+    y="260"
+    text-anchor="middle"
+    fill="#059669"
+    font-family="Arial, sans-serif"
+    font-size="12"
+  >
+    https://nestjs.com
+  </text>
+</svg>

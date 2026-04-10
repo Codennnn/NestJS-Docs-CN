@@ -1,0 +1,173 @@
+import injectorLogsImage from '/public/assets/injector_logs.png'
+
+# 常见错误排查
+
+在使用 NestJS 进行开发时，尤其是初学阶段，你可能会遇到各类依赖注入相关的问题。以下将列出最常见的错误类型及其解决思路。
+
+## 无法解析依赖（Cannot resolve dependency）
+
+<CalloutInfo>
+  推荐使用 [NestJS Devtools](/devtools/overview#排查无法解析依赖关系错误)
+  工具，快速定位和解决依赖解析错误。
+</CalloutInfo>
+
+NestJS 最常见的错误之一是「无法解析某个提供者的依赖项」，其典型报错如下：
+
+```bash
+Nest can't resolve dependencies of the <provider> (?). Please make sure that the argument <unknown_token> at index [<index>] is available in the <module> context.
+
+Potential solutions:
+- Is <module> a valid NestJS module?
+- If <unknown_token> is a provider, is it part of the current <module>?
+- If <unknown_token> is exported from a separate @Module, is that module imported within <module>?
+  @Module({
+    imports: [ /* the Module containing <unknown_token> */ ]
+  })
+```
+
+导致此问题的常见原因包括：
+
+### 提供者未注册
+
+最典型的情况是某个类被用作提供者，但未被加入模块的 `providers` 数组中。请确保该类已正确声明，并参考[提供者注册规范](/fundamentals/custom-providers#依赖注入基础)。
+
+### 错误地放入 `imports`
+
+初学者常将提供者误放入 `imports` 数组中。此时报错中的 `<module>` 通常会显示为该提供者的类名。请确保类的声明位置正确，并且所属模块已正确导入。
+
+### 检查依赖是否对模块可见
+
+当某个模块中的提供者依赖于另一个未显式导入的模块中的提供者时，就会引发此类错误。例如，将同一个提供者同时声明在 「功能模块」 和 「根模块」 中，会让 Nest 试图创建多个实例，导致冲突。建议仅在功能模块中声明提供者，并通过该模块的 `exports` 导出，再由根模块通过 `imports` 引入。
+
+### 循环导入错误（非循环依赖）
+
+如果 `<unknown_token>` 是某个类或令牌，但并非构造函数中互相引用的循环依赖，而是文件之间的循环导入，也会引发此错误。常见场景包括：
+
+- 模块文件中声明某个提供者，同时导入另一个服务；
+- 而该服务又反过来从模块文件中导入某个令牌；
+- 使用 barrel 文件（聚合导出）时不小心形成导入环路。
+
+建议将共用的常量、令牌等抽离到独立文件中，避免互相引用。
+
+### 注入类型为 `Object`
+
+当错误信息中的 `<unknown_token>` 显示为 `Object`，通常是因为你试图注入某个接口或类型，但未为其指定注入令牌。请确认：
+
+1.  是否使用了 `@Inject()` 装饰器指定了正确的令牌；
+2.  是否导入了具体类而非仅通过 `import type` 语法引入类型；
+3.  是否在构造函数中误用了抽象类型作为依赖；
+
+详见：[自定义提供者](/fundamentals/custom-providers)。
+
+### 提供者自我注入
+
+NestJS 不支持将某个类注入其自身。若构造函数中依赖自身实例，会导致解析失败，并将 `<unknown_token>` 与 `<provider>` 显示为相同。
+
+### 多包仓库下的多版本依赖问题
+
+在 Monorepo 架构中，如果 `@nestjs/core` 被多个模块以不同路径加载，也会引发依赖解析失败，典型报错如下：
+
+```bash
+Nest can't resolve dependencies of the <provider> (?).
+Please make sure that the argument ModuleRef at index [<index>] is available in the <module> context.
+...
+```
+
+例如：
+
+```
+.
+├── node_modules
+│   └── @nestjs/core           # 被主应用加载
+├── apps
+│   └── api
+│       └── node_modules
+│           └── @nestjs/bull
+│               └── node_modules
+│                   └── @nestjs/core   # 被其他依赖重复加载
+```
+
+解决方案：
+
+- Yarn workspace：配置 [`nohoist`](https://classic.yarnpkg.com/blog/2018/02/15/nohoist)，避免依赖被错误提升；
+- pnpm：将 `@nestjs/core` 声明为 `peerDependencies`，并使用 [`dependenciesMeta.injected`](https://pnpm.io/package_json#dependenciesmetainjected) 确保引用一致；
+
+## 循环依赖（Circular Dependency）
+
+NestJS 本身通过依赖注入机制规避了许多常规的循环引用问题，但在复杂场景下，仍可能触发循环依赖错误：
+
+```bash
+Nest cannot create the <module> instance.
+The module at index [<index>] of the <module> "imports" array is undefined.
+
+Potential causes:
+- A circular dependency between modules. Use forwardRef() to avoid it. Read more: https://docs.nestjs.com/fundamentals/circular-dependency
+- The module at index [<index>] is of type "undefined". Check your import statements and the type of the module.
+
+Scope [<module_import_chain>]
+# 例如：AppModule -> FooModule
+```
+
+此类错误可能由以下原因导致：
+
+### 模块间的循环依赖
+
+两个模块互相导入时，Nest 无法决定初始化顺序。这种情况应使用 `forwardRef(() => Module)` 包裹导入模块，显式打破循环引用。
+
+### 文件间的循环导入
+
+某些常量（如 DI token）被定义在模块文件中，又被服务文件引用，反过来服务文件再导入模块文件。这种写法容易引起循环导入。建议将常量、令牌等抽离至单独文件，作为中立依赖源。
+
+## 调试依赖解析
+
+除了手动检查依赖关系，从 Nest 8.1.0 开始，你还可以将 `NEST_DEBUG` 环境变量设置为任意真值字符串，从而在 Nest 解析依赖时获取额外的日志信息。
+
+从 NestJS v8.1.0 起，支持通过环境变量开启依赖解析调试信息。
+
+```bash
+NEST_DEBUG=true
+```
+
+启用后，将在控制台输出详细的依赖注入过程，如下图所示：
+
+<DocImage src={injectorLogsImage} />
+
+- 黄色：注入目标类（宿主）
+- 蓝色：所注入的依赖项（token）
+- 紫色：NestJS 当前在哪个模块中查找该依赖
+
+这些信息可帮助你追踪注入路径，快速定位配置错误。
+
+## 「File change detected」 日志无限循环
+
+在 Windows 系统中，使用 TypeScript 4.9 或更高版本的开发者，可能会在以 `watch` 模式运行 Nest 应用时遇到日志不断重复输出的问题。
+
+当你执行 `npm run start:dev` 启动项目后，终端中可能会持续打印如下信息：
+
+```bash
+XX:XX:XX AM - File change detected. Starting incremental compilation...
+XX:XX:XX AM - Found 0 errors. Watching for file changes.
+```
+
+### 问题原因
+
+Nest CLI 在开发模式下使用的是 TypeScript 的 `tsc --watch` 命令。自 TypeScript 4.9 起，其文件变更检测机制默认改为基于操作系统的文件系统事件（File System Events）。然而在部分 Windows 设备上，该机制可能无法稳定工作，导致 TypeScript 误判文件被修改，从而触发无限次的重新编译。
+
+### 解决方案
+
+你可以通过修改 `tsconfig.json` 文件，显式指定使用更稳定的轮询策略，从而规避该问题。具体做法如下：
+
+```json
+{
+  "compilerOptions": {
+    // 其他配置...
+  },
+  "watchOptions": {
+    "watchFile": "fixedPollingInterval"
+  }
+}
+```
+
+`watchFile: "fixedPollingInterval"` 指定 TypeScript 采用固定轮询间隔的方式来监听文件变更。尽管性能略低，但兼容性更强，能有效避免上述循环问题。
+
+更多关于 `watchOptions` 选项的说明，请参阅 [TypeScript 官方文档](https://www.typescriptlang.org/tsconfig#watch-watchDirectory)。

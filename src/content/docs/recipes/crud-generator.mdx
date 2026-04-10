@@ -1,0 +1,134 @@
+# CRUD 生成器（仅限 TypeScript）
+
+在实际开发中，我们常常需要为应用添加新功能，这通常意味着要引入新的资源。每新增一个资源，都伴随着一系列重复、繁琐的操作。
+
+以一个典型场景为例：你需要为 User 和 Product 两个实体提供完整的 CRUD（增删改查）接口。按照 NestJS 的最佳实践，你通常需要为每个实体执行如下操作：
+
+- 创建一个模块（`nest g mo`），用于组织相关功能代码，划定逻辑边界。
+- 创建一个控制器（`nest g co`），用于定义路由或 GraphQL 查询/变更。
+- 创建一个服务（`nest g s`），用于封装和实现业务逻辑。
+- 定义实体类或接口，描述资源的数据结构。
+- 定义 DTO（或 GraphQL 的输入类型），用于数据在请求中的传输格式。
+
+这些步骤看似简单，但重复多了也相当耗时。
+
+为此，[Nest CLI](/cli/overview) 提供了内置的资源生成器（schematic），可以一次性生成上述所有代码模板，极大地简化了开发流程，提升效率。
+
+<CalloutInfo>
+  该生成器支持多种传输层，包括 **HTTP 控制器**、**微服务控制器**、**GraphQL
+  解析器**（支持 code-first 与 schema-first 模式）、以及 **WebSocket 网关**。
+</CalloutInfo>
+
+## 快速生成资源模块
+
+你可以通过以下命令，在项目根目录中快速生成一个完整的资源模块：
+
+```bash
+nest g resource
+```
+
+该命令会自动创建模块（Module）、控制器（Controller）、服务（Service）、实体类（Entity）、数据传输对象（DTO）以及对应的测试文件（`.spec`），全流程自动化，无需手动干预。
+
+以下是一个基于 RESTful API 自动生成的控制器示例：
+
+```ts
+@Controller('users')
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Post()
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.create(createUserDto)
+  }
+
+  @Get()
+  findAll() {
+    return this.usersService.findAll()
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findOne(+id)
+  }
+
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.usersService.update(+id, updateUserDto)
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(+id)
+  }
+}
+```
+
+无论你选择的是 REST、GraphQL、微服务还是 WebSocket，NestJS 的资源生成器都会为你预置完整的 CRUD 方法骨架，帮助你高效搭建项目，免去编写重复样板代码的烦恼。
+
+<CalloutInfo type="warning">
+  默认生成的服务类**不会依赖任何特定的 ORM
+  或数据库实现**，以确保其具备良好的通用性。所有方法仅包含占位逻辑，便于你根据实际业务需求进行填充和扩展。
+</CalloutInfo>
+
+如果你正在构建 GraphQL 应用，只需在生成器提示中选择所需的传输层类型（如 `GraphQL (code first)` 或 `GraphQL (schema first)`），NestJS 将自动生成解析器（Resolver）类，而非 REST 控制器，助你无缝对接 GraphQL 架构。
+
+```bash
+$ nest g resource users
+
+> ✔ What transport layer do you use? GraphQL (code first)
+> ? Would you like to generate CRUD entry points? Yes
+> CREATE src/users/users.module.ts (224 bytes)
+> CREATE src/users/users.resolver.spec.ts (525 bytes)
+> CREATE src/users/users.resolver.ts (1109 bytes)
+> CREATE src/users/users.service.spec.ts (453 bytes)
+> CREATE src/users/users.service.ts (625 bytes)
+> CREATE src/users/dto/create-user.input.ts (195 bytes)
+> CREATE src/users/dto/update-user.input.ts (281 bytes)
+> CREATE src/users/entities/user.entity.ts (187 bytes)
+> UPDATE src/app.module.ts (312 bytes)
+```
+
+<CalloutInfo>
+  如果你不希望生成测试文件，可以使用 `--no-spec` 参数，例如：`nest g resource
+  users --no-spec`。
+</CalloutInfo>
+
+如下所示，Nest CLI 会自动生成解析器文件，并注入相应依赖，如服务类、实体和 DTO：
+
+```ts
+import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql'
+import { UsersService } from './users.service'
+import { User } from './entities/user.entity'
+import { CreateUserInput } from './dto/create-user.input'
+import { UpdateUserInput } from './dto/update-user.input'
+
+@Resolver(() => User)
+export class UsersResolver {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Mutation(() => User)
+  createUser(@Args('createUserInput') createUserInput: CreateUserInput) {
+    return this.usersService.create(createUserInput)
+  }
+
+  @Query(() => [User], { name: 'users' })
+  findAll() {
+    return this.usersService.findAll()
+  }
+
+  @Query(() => User, { name: 'user' })
+  findOne(@Args('id', { type: () => Int }) id: number) {
+    return this.usersService.findOne(id)
+  }
+
+  @Mutation(() => User)
+  updateUser(@Args('updateUserInput') updateUserInput: UpdateUserInput) {
+    return this.usersService.update(updateUserInput.id, updateUserInput)
+  }
+
+  @Mutation(() => User)
+  removeUser(@Args('id', { type: () => Int }) id: number) {
+    return this.usersService.remove(id)
+  }
+}
+```

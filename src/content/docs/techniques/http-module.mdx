@@ -1,0 +1,202 @@
+# HTTP 模块
+
+[Axios](https://github.com/axios/axios) 是一个功能强大且被广泛使用的 HTTP 客户端库。Nest 对其进行了封装，并通过内置的 `HttpModule` 提供统一的接口支持。该模块会导出 `HttpService`，它基于 Axios 提供多种便捷方法用于发起 HTTP 请求，并默认将响应结果封装为 `Observable` 流，便于与响应式编程模式集成。
+
+<CalloutInfo>
+  除了 Axios，你也可以选择其他流行的 Node.js HTTP 客户端，例如
+  [got](https://github.com/sindresorhus/got) 或
+  [undici](https://github.com/nodejs/undici)。
+</CalloutInfo>
+
+## 安装依赖
+
+开始使用前，请先安装相关依赖包：
+
+```bash
+npm install @nestjs/axios axios
+```
+
+## 快速上手
+
+依赖安装完成后，首先需要在目标模块中导入 `HttpModule`，以便在服务中使用 `HttpService`：
+
+```ts
+import { HttpModule } from '@nestjs/axios'
+
+@Module({
+  imports: [HttpModule],
+  providers: [CatsService],
+})
+export class CatsModule {}
+```
+
+接着，即可通过依赖注入的方式在服务中获取 `HttpService` 实例：
+
+```ts
+import type { HttpService } from '@nestjs/axios'
+import type { AxiosResponse } from 'axios'
+
+@Injectable()
+export class CatsService {
+  constructor(private readonly httpService: HttpService) {}
+
+  findAll(): Observable<AxiosResponse<Cat[]>> {
+    return this.httpService.get('http://localhost:3000/cats')
+  }
+}
+```
+
+<CalloutInfo>
+  `AxiosResponse` 是由 `axios` 包导出的类型定义，用于描述响应结果的结构（可通过
+  `npm install axios` 安装）。
+</CalloutInfo>
+
+通过 `HttpService` 发起的所有请求都会返回一个 `Observable<AxiosResponse<T>>` 对象，其中 `T` 表示响应数据的泛型类型。这种响应式结构非常适合与 Nest 的响应流控制、拦截器等机制配合使用。
+
+## 配置
+
+Axios 提供了丰富的配置选项，允许你灵活定制 `HttpService` 的行为。你可以在 [Axios 官方文档](https://github.com/axios/axios#request-config)中查看更多配置项的详细说明。
+
+在 `HttpModule` 中配置底层的 Axios 实例非常简单，只需在通过 `register()` 方法导入模块时，传入一个可选的配置对象，该对象会原样传递给 Axios 的构造函数：
+
+```ts
+@Module({
+  imports: [
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5,
+    }),
+  ],
+  providers: [CatsService],
+})
+export class CatsModule {}
+```
+
+## 异步配置
+
+当你需要以**异步方式**（而非静态对象）提供模块配置时，可以使用 `registerAsync()` 方法。和多数动态模块一样，Nest 提供了多种灵活的异步配置策略。
+
+### 使用工厂函数
+
+最常见的一种方式是通过**工厂函数**返回配置对象：
+
+```ts
+HttpModule.registerAsync({
+  useFactory: () => ({
+    timeout: 5000,
+    maxRedirects: 5,
+  }),
+})
+```
+
+工厂函数可以是同步的，也可以是[异步函数](/fundamentals/custom-providers#工厂提供者usefactory)，并支持通过 `inject` 注入其他依赖项：
+
+```ts
+HttpModule.registerAsync({
+  imports: [ConfigModule],
+  useFactory: async (configService: ConfigService) => ({
+    timeout: configService.get('HTTP_TIMEOUT'),
+    maxRedirects: configService.get('HTTP_MAX_REDIRECTS'),
+  }),
+  inject: [ConfigService],
+})
+```
+
+### 使用配置类
+
+除了工厂函数外，你也可以使用**配置类**来实现异步配置：
+
+```ts
+HttpModule.registerAsync({
+  useClass: HttpConfigService,
+})
+```
+
+在上述方式中，Nest 会自动实例化 `HttpConfigService` 并调用其 `createHttpOptions()` 方法，用于生成配置对象。为了实现这一点，该类需要实现 `HttpModuleOptionsFactory` 接口：
+
+```ts
+@Injectable()
+class HttpConfigService implements HttpModuleOptionsFactory {
+  createHttpOptions(): HttpModuleOptions {
+    return {
+      timeout: 5000,
+      maxRedirects: 5,
+    }
+  }
+}
+```
+
+### 使用已有的配置提供者
+
+如果你已经在其他地方定义好了配置提供者，并希望直接复用（而不是让 `HttpModule` 再创建一个新的实例），可以使用 `useExisting` 语法：
+
+```ts
+HttpModule.registerAsync({
+  imports: [ConfigModule],
+  useExisting: HttpConfigService,
+})
+```
+
+### 提供额外的依赖项
+
+`registerAsync()` 还支持传入 `extraProviders`，用于添加额外的依赖项。这些额外提供者会与模块中的默认提供者合并：
+
+```ts
+HttpModule.registerAsync({
+  imports: [ConfigModule],
+  useClass: HttpConfigService,
+  extraProviders: [MyAdditionalProvider],
+})
+```
+
+当你需要为工厂函数或类的构造函数注入更多依赖时，这种方式非常有用。
+
+## 直接操作 Axios 实例
+
+如果 `HttpModule.register` 提供的配置项无法满足你的需求，或者你希望直接调用底层由 `@nestjs/axios` 创建的 Axios 实例，可以通过 `HttpService` 的 `axiosRef` 属性访问该实例。例如：
+
+```ts
+@Injectable()
+export class CatsService {
+  constructor(private readonly httpService: HttpService) {}
+
+  findAll(): Promise<AxiosResponse<Cat[]>> {
+    return this.httpService.axiosRef.get('http://localhost:3000/cats')
+    //                      ^ 这里返回的是 AxiosInstance 接口
+  }
+}
+```
+
+## 使用 RxJS 获取响应数据
+
+由于 `HttpService` 的方法默认返回的是 `Observable`，我们可以结合 RxJS 提供的 `firstValueFrom` 或 `lastValueFrom` 操作符，将其转换为 `Promise`，以简化异步处理逻辑。示例代码如下：
+
+```ts
+import { catchError, firstValueFrom } from 'rxjs'
+
+@Injectable()
+export class CatsService {
+  private readonly logger = new Logger(CatsService.name)
+
+  constructor(private readonly httpService: HttpService) {}
+
+  async findAll(): Promise<Cat[]> {
+    const { data } = await firstValueFrom(
+      this.httpService.get<Cat[]>('http://localhost:3000/cats').pipe(
+        catchError((error: AxiosError) => {
+          this.logger.error(error.response.data)
+          throw new Error('请求失败')
+        })
+      )
+    )
+    return data
+  }
+}
+```
+
+<CalloutInfo>
+  如需了解
+  [`firstValueFrom`](https://rxjs.dev/api/index/function/firstValueFrom) 和
+  [`lastValueFrom`](https://rxjs.dev/api/index/function/lastValueFrom)
+  的差异，请参考 RxJS 官方文档。
+</CalloutInfo>

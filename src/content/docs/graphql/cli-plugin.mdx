@@ -1,0 +1,234 @@
+# CLI 插件
+
+<CalloutInfo type="warning">
+
+本章节仅适用于代码优先（code first）方式。
+
+</CalloutInfo>
+
+TypeScript 的元数据反射（metadata reflection）系统有先天限制，例如无法在运行时确定类拥有哪些属性、某个属性是否为必填或可选。好消息是，部分限制可以在编译阶段补齐。Nest 提供了一个编译期插件，强化 TypeScript 编译流程，自动补全重复的模板代码（boilerplate）。
+
+<CalloutInfo>
+  该插件为**可选**。你可以继续手动声明所有装饰器，或仅在需要时为特定属性添加装饰器。
+</CalloutInfo>
+
+## 概述
+
+GraphQL 插件会自动完成以下工作：
+
+- 为所有输入对象、对象类型及参数类的属性自动补充 `@Field` 装饰器，除非使用了 `@HideField`
+- 根据问号可选标记自动设置 `nullable`（例如 `name?: string` 会推断为 `nullable: true`）
+- 根据属性类型自动推断并填充 `type`（包含数组类型）
+- 当启用 `introspectComments: true` 时，依据注释自动生成字段描述
+
+请注意，只有文件名包含以下任一后缀时插件才会参与分析：`['.input.ts', '.args.ts', '.entity.ts', '.model.ts']`（例如 `author.entity.ts`）。如果你使用其他后缀，可以在稍后的 `typeFileNameSuffix` 选项中调整。
+
+未启用插件时，你需要频繁重复装饰器，让包理解类型在 GraphQL 中的声明方式。例如，定义一个简单的 `Author` 类通常写成：
+
+```ts filename='authors/models/author.model.ts'
+@ObjectType()
+export class Author {
+  @Field((type) => ID)
+  id: number
+
+  @Field({ nullable: true })
+  firstName?: string
+
+  @Field({ nullable: true })
+  lastName?: string
+
+  @Field((type) => [Post])
+  posts: Post[]
+}
+```
+
+在中等规模的项目中手动补齐尚可接受，但随着类的数量增加，代码会迅速变得冗长难维护。
+
+启用 GraphQL 插件后，上述类定义可以简化为：
+
+```ts filename='authors/models/author.model.ts'
+@ObjectType()
+export class Author {
+  @Field((type) => ID)
+  id: number
+  firstName?: string
+  lastName?: string
+  posts: Post[]
+}
+```
+
+插件基于**抽象语法树**，在编译期自动补齐所需装饰器，你无需在代码中到处手动添加 `@Field`。
+
+<CalloutInfo>
+  插件会自动生成缺失的 GraphQL 属性。如需覆盖默认行为，直接显式添加 `@Field()`
+  即可。
+</CalloutInfo>
+
+## 注释自动提取功能
+
+启用注释自动提取（comments introspection）后，CLI 插件会依据注释为字段自动生成描述信息。
+
+例如，假设有如下 `roles` 属性：
+
+```ts
+/**
+ * 用户角色列表
+ */
+@Field(() => [String], {
+  description: `用户角色列表`
+})
+roles: string[]
+```
+
+未启用该功能时，需要手动重复填写 `description`。启用 `introspectComments` 后，CLI 插件会自动提取注释并填充描述，字段即可简化为：
+
+```ts
+/**
+ * 用户角色列表
+ */
+roles: string[]
+```
+
+## 使用命令行工具插件
+
+如果你使用 [Nest 命令行工具](/cli/overview)，在 `nest-cli.json` 中添加以下 `plugins` 配置即可启用插件：
+
+```json
+{
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "plugins": ["@nestjs/graphql"]
+  }
+}
+```
+
+你可以通过 `options` 属性自定义插件行为。
+
+```json
+{
+  "collection": "@nestjs/schematics",
+  "sourceRoot": "src",
+  "compilerOptions": {
+    "plugins": [
+      {
+        "name": "@nestjs/graphql",
+        "options": {
+          "typeFileNameSuffix": [".input.ts", ".args.ts"],
+          "introspectComments": true
+        }
+      }
+    ]
+  }
+}
+```
+
+`options` 属性需符合以下接口定义：
+
+```ts
+export interface PluginOptions {
+  typeFileNameSuffix?: string[]
+  introspectComments?: boolean
+}
+```
+
+| 选项                 | 默认值                                                 | 说明                                              |
+| -------------------- | ------------------------------------------------------ | ------------------------------------------------- |
+| `typeFileNameSuffix` | `['.input.ts', '.args.ts', '.entity.ts', '.model.ts']` | GraphQL 类型文件的后缀名                          |
+| `introspectComments` | `false`                                                | 如果设置为 true，插件会根据注释为属性生成描述信息 |
+
+如果未使用命令行工具，而是自定义 `webpack`，同样可以与 `ts-loader` 结合：
+
+```js
+getCustomTransformers: (program: any) => ({
+  before: [require('@nestjs/graphql/plugin').before({}, program)]
+}),
+```
+
+## SWC 构建器（SWC builder）
+
+在标准项目结构（非多包仓库）中使用 SWC 构建器时，如需启用 CLI 插件，请先按[此处](/recipes/swc#类型检查支持)开启类型检查（type checking）。
+
+```bash
+$ nest start -b swc --type-check
+```
+
+如果是多包仓库（Monorepo），请参考[这里](/recipes/swc#多包仓库项目配置)的指引。
+
+```bash
+$ npx ts-node src/generate-metadata.ts
+# 或 npx ts-node apps/{YOUR_APP}/src/generate-metadata.ts
+```
+
+生成的序列化元数据文件需通过 `GraphQLModule` 载入，示例如下：
+
+```ts
+import metadata from './metadata' // <-- 该文件由 "PluginMetadataGenerator" 自动生成
+
+GraphQLModule.forRoot<...>({
+  ..., // 其他选项
+  metadata,
+}),
+```
+
+## 与 `ts-jest` 的集成（端到端测试）
+
+启用插件后运行端到端测试（e2e tests）时，可能遇到 schema 编译问题。常见报错如下：
+
+```json
+Object type <name> must define one or more fields.
+```
+
+原因是 `jest` 配置中未引入 `@nestjs/graphql/plugin`。
+
+为了解决这个问题，请在你的端到端测试目录下创建如下文件：
+
+```js
+const transformer = require('@nestjs/graphql/plugin')
+
+module.exports.name = 'nestjs-graphql-transformer'
+// 每当你更改下面的配置时，都应该修改版本号，否则 jest 不会检测到配置变更
+module.exports.version = 1
+
+module.exports.factory = (cs) => {
+  return transformer.before(
+    {
+      // @nestjs/graphql/plugin 选项（可以为空）
+    },
+    cs.program // 对于较旧版本的 Jest（<= v27），应为 "cs.tsCompiler.program"
+  )
+}
+```
+
+完成上述步骤后，在 `jest` 配置文件中引入该 AST 转换器。起始项目默认的端到端测试配置位于 `test/jest-e2e.json`。
+
+```json
+{
+  ... // 其他配置
+  "globals": {
+    "ts-jest": {
+      "astTransformers": {
+        "before": ["<path to the file created above>"]
+      }
+    }
+  }
+}
+```
+
+若使用 `jest@^29`，需改用下方配置，前述写法已废弃。
+
+```json
+{
+  ... // 其他配置
+  "transform": {
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "astTransformers": {
+          "before": ["<path to the file created above>"]
+        }
+      }
+    ]
+  }
+}
+```

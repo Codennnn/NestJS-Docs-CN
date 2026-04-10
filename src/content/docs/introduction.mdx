@@ -1,0 +1,66 @@
+# NestJS 介绍
+
+NestJS 是一个用于构建高效、可扩展的 Node.js 服务端应用的渐进式框架。它完全基于 TypeScript，并对其提供了完整支持，同时也允许开发者使用纯 JavaScript 编写应用。
+
+NestJS 融合了多种编程范式，包括面向对象编程（OOP）、函数式编程（FP）以及函数响应式编程（FRP），为开发者提供了灵活而强大的开发体验。
+
+在底层实现上，Nest 默认使用 [Express](https://expressjs.com/) 作为 HTTP 服务引擎，同时也支持切换为性能更高的 [Fastify](https://fastify.dev/)。Nest 在这些成熟框架之上构建了一层抽象，既屏蔽了底层复杂度，又保留了对原生 API 的访问能力。这种设计让开发者既能享受 Nest 提供的结构化开发体验，也能灵活使用底层框架的丰富生态与中间件系统。
+
+## 核心理念
+
+随着 Node.js 的广泛应用，JavaScript 逐渐成为前后端通用的开发语言。由此也催生出如 Angular、React 和 Vue 等优秀的前端框架，它们大幅提升了开发效率，使应用更易于扩展、测试与维护。
+
+然而，在服务端开发领域，尽管 Node.js 拥有丰富的库和工具，但真正系统化的**应用架构**方案仍较为稀缺。
+
+Nest 正是为解决这一痛点而生。它提供了开箱即用的架构体系，帮助开发者快速构建高度可测试、易维护、低耦合且具备良好可扩展性的服务端应用。其整体架构深受 Angular 启发，将成熟的模块化设计理念引入到服务端开发中，为构建大型系统提供了坚实基础。
+
+## 快速开始：安装与项目创建
+
+你可以通过两种主要方式开始使用 NestJS：使用官方推荐的 [Nest CLI](/cli/overview) 脚手架工具快速生成项目，或是克隆预设的起始项目。这两种方式都能帮助你迅速搭建具备基础结构和配置的 NestJS 应用，让你专注于业务开发而非繁琐的初始化流程。
+
+### 使用 Nest CLI 创建新项目（推荐）
+
+Nest CLI 是构建 NestJS 应用的官方工具，能够自动生成规范的项目结构与必要依赖。安装并创建新项目的命令如下：
+
+```bash
+# 安装依赖
+npm install -g @nestjs/cli
+
+# 创建项目
+# [!code word:project-name:1]
+nest new project-name
+#        ^^^^^^^^^^^^ 这里可以填写你想要的项目名称
+```
+
+上述命令将创建一个名为 `project-name` 的新目录，并自动生成核心文件与模块，形成符合官方规范的项目骨架。对于初次接触 NestJS 的开发者，强烈推荐采用这种方式。我们将在[快速上手章节](/first-steps)中详细介绍其使用流程。
+
+### 克隆起始项目
+
+你也可以通过 Git 克隆官方维护的 TypeScript 起始模板：
+
+```bash
+$ git clone https://github.com/nestjs/typescript-starter.git project
+$ cd project
+$ npm install
+$ npm run start
+```
+
+该模板适用于希望快速搭建并自定义项目结构的用户。项目启动后，默认监听本地地址 `http://localhost:3000/`。
+
+<CalloutInfo>
+  如果你只想复制项目内容而不保留 Git 历史记录，推荐使用
+  [degit](https://github.com/Rich-Harris/degit) 工具。
+</CalloutInfo>
+
+如需使用 JavaScript 版本，只需将仓库地址中的 `typescript-starter.git` 替换为 `javascript-starter.git`。
+
+### 手动初始化项目
+
+除了上述方式，你也可以从零开始，手动安装依赖并搭建项目结构。这种方式更灵活，也更具挑战性，适合有经验的开发者。如果选择这种方式，那么你至少需要安装以下核心依赖：
+
+- `@nestjs/core`
+- `@nestjs/common`
+- `rxjs`
+- `reflect-metadata`
+
+若你倾向于这种「裸构建」方式，可参考这篇实践教程：[5 steps to create a bare minimum NestJS app from scratch!](https://dev.to/micalevisk/5-steps-to-create-a-bare-minimum-nestjs-app-from-scratch-5c3b)。

@@ -1,0 +1,276 @@
+import graphPublishedTerminalImage from '/public/assets/devtools/graph-published-terminal.png'
+import projectImage from '/public/assets/devtools/project.png'
+import reportImage from '/public/assets/devtools/report.png'
+import nodesSelectionImage from '/public/assets/devtools/nodes-selection.png'
+import integrateGithubAppImage from '/public/assets/devtools/integrate-github-app.png'
+import actionsPreviewImage from '/public/assets/devtools/actions-preview.png'
+
+# CI/CD 集成
+
+<CalloutInfo>
+  本节将介绍如何将 Nest Devtools 集成至 Nest 应用中。如需了解 Devtools
+  工具本身的功能与特性，请访问其[官方网站][devtools-website]。
+</CalloutInfo>
+
+<CalloutInfo type="warning">
+  仅**企业版**用户可使用 CI/CD 集成功能。
+</CalloutInfo>
+
+你可以通过下方视频快速了解 CI/CD 集成的用途及其配置方式：
+
+<figure>
+  <iframe
+    width="100%"
+    height="400"
+    src="https://www.youtube.com/embed/r5RXcBrnEQ8"
+    title="YouTube 视频播放器"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    allowFullScreen
+  />
+</figure>
+
+## 发布依赖关系图
+
+要在 CI/CD 流程中发布应用的依赖关系图，你需要在应用的引导文件（通常是 `main.ts`）中配置 `GraphPublisher` 类。该类可从 `@nestjs/devtools-integration` 模块导入（详见上一章节）。示例代码如下：
+
+```ts filename='main.ts'
+async function bootstrap() {
+  const shouldPublishGraph = process.env.PUBLISH_GRAPH === 'true';
+
+  const app = await NestFactory.create(AppModule, {
+    snapshot: true,
+    preview: shouldPublishGraph,
+  });
+
+  if (shouldPublishGraph) {
+    await app.init();
+
+    const publishOptions = { ... }; // 注意：此 options 配置将根据你的 CI/CD 平台有所差异
+    const graphPublisher = new GraphPublisher(app);
+    await graphPublisher.publish(publishOptions);
+
+    await app.close();
+  } else {
+    await app.listen(process.env.PORT ?? 3000);
+  }
+}
+```
+
+如上所示，依赖关系图的发布依赖于 `GraphPublisher`，它会将序列化后的依赖图上传至集中式注册中心（Registry）。是否执行发布操作由环境变量 `PUBLISH_GRAPH` 控制，建议仅在 CI/CD 流程中启用。
+
+将 `preview` 属性设为 `true` 可使应用以「预览模式」启动，在该模式下，控制器、拦截器、提供者等的构造函数和生命周期钩子将不会被执行。这虽然不是强制要求，但能显著降低对外部依赖（如数据库）的需求，从而简化流水线运行环境。
+
+`publishOptions` 的结构会因所使用的 CI/CD 服务商而异。我们将在后续章节中分别介绍主流平台的配置方式。
+
+当依赖关系图成功发布后，终端将输出类似如下信息：
+
+<DocImage src={graphPublishedTerminalImage} alt="Graph published terminal" />
+
+此外，你还可以在 Devtools 项目页面中查看该次发布记录：
+
+<DocImage src={projectImage} alt="Project" />
+
+## 报告
+
+只要集中式注册表中存在对应的依赖快照，Devtools 就会在每次构建时生成一份报告。例如，当你针对 `master` 分支创建拉取请求（PR），且该分支的依赖关系图已发布过，系统便能识别出本次构建与历史版本之间的差异，并自动生成报告。反之，如果缺少历史快照，则不会生成报告。
+
+你可以在项目对应的页面（通常位于所属组织下）查看这些报告。
+
+<DocImage src={reportImage} alt="Report" />
+
+报告可以帮助你发现常被代码评审忽略的变更。例如，有人修改了一个**深层嵌套提供者**的作用域（Scope）——这种变动往往不易察觉，但通过 Devtools 的报告，你能快速发现并确认该变更是否为有意操作。又如，如果某个端点的守卫（Guard）被移除，该项也会在报告中高亮标注为「受影响项」。若该路由缺乏集成测试或端到端测试，可能直到正式上线后才会暴露出安全问题。
+
+同样地，如果你在一个**大型代码库**中将某个模块设为全局模块（Global），报告会显示依赖关系图中新增加了多少条边（Edge）。通常，这类改动意味着全局依赖的扩散，可能并不合理，值得格外注意。
+
+## 构建预览
+
+对于每一个已发布的依赖关系图，你都可以点击 **Preview** 按钮，回溯其任意历史版本，预览当时的依赖结构。如果该版本包含构建报告，还能在图中清晰看到变更差异：
+
+- 绿色节点：新增项
+- 灰色节点：已更新项
+- 红色节点：已删除项
+
+<DocImage src={nodesSelectionImage} alt="Nodes selection" />
+
+借助这项「时光回溯」功能，你可以通过对比当前版本与历史版本的依赖关系图，快速定位潜在问题。根据配置，Devtools 可在每一次拉取请求，甚至每一次提交后自动生成依赖快照，方便你随时回溯、查看改动细节。
+
+你可以将 Devtools 理解为一个专为 Nest 应用设计的 Git 式依赖可视化工具，它不仅追踪依赖变更，还能将其**以图形化方式直观呈现**，大大提升了调试与评审效率。
+
+## 集成：GitHub Actions
+
+要将 Devtools 集成到 CI 流程中，可以通过 GitHub Actions 自动发布图谱数据。首先，在项目根目录下创建 `.github/workflows/publish-graph.yml` 文件，并添加以下内容：
+
+```yaml filename='publish-graph.yml'
+name: Devtools
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  publish:
+    if: github.actor != 'dependabot[bot]'
+    name: Publish graph
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Setup Environment (PR)
+        if: {{ '${{' }} github.event_name == 'pull_request' {{ '}}' }}
+        shell: bash
+        run: |
+          echo "COMMIT_SHA={{ '${{' }} github.event.pull_request.head.sha {{ '}}' }}" >> \${GITHUB_ENV}
+      - name: Setup Environment (Push)
+        if: {{ '${{' }} github.event_name == 'push' {{ '}}' }}
+        shell: bash
+        run: |
+          echo "COMMIT_SHA=\${GITHUB_SHA}" >> \${GITHUB_ENV}
+      - name: Publish
+        run: PUBLISH_GRAPH=true npm run start
+        env:
+          DEVTOOLS_API_KEY: CHANGE_THIS_TO_YOUR_API_KEY
+          REPOSITORY_NAME: {{ '${{' }} github.event.repository.name {{ '}}' }}
+          BRANCH_NAME: {{ '${{' }} github.head_ref || github.ref_name {{ '}}' }}
+          TARGET_SHA: {{ '${{' }} github.event.pull_request.base.sha {{ '}}' }}
+```
+
+在实际使用中，`DEVTOOLS_API_KEY` 应通过 GitHub Secrets（加密机密）进行管理。关于如何创建和使用 Secret，可参考 [GitHub 官方文档][github-secrets-docs]。
+
+上述工作流会在以下两种情况触发：
+
+- 向 master 分支推送代码（push）。
+- 向 master 分支发起拉取请求（pull request）。
+
+你可以根据项目的实际需求自行调整触发条件。此配置的关键在于为 GraphPublisher 提供所需的环境变量。
+
+<CalloutInfo type="warning" title="重要提示">
+  在启用此工作流之前，请先替换 `DEVTOOLS_API_KEY` 为你在 [Devtools
+  管理后台][devtools-api-keys]中生成的专属 API 密钥。
+</CalloutInfo>
+
+接下来，返回 `main.ts` 文件，补全之前留空的 `publishOptions` 对象：
+
+```ts filename='main.ts'
+const publishOptions = {
+  apiKey: process.env.DEVTOOLS_API_KEY,
+  repository: process.env.REPOSITORY_NAME,
+  owner: process.env.GITHUB_REPOSITORY_OWNER,
+  sha: process.env.COMMIT_SHA,
+  target: process.env.TARGET_SHA,
+  trigger: process.env.GITHUB_BASE_REF ? 'pull' : 'push',
+  branch: process.env.BRANCH_NAME,
+}
+```
+
+为了获得更优的使用体验，推荐为项目集成 GitHub App。只需点击 Devtools 页面中的「Integrate GitHub app」按钮即可（如下图所示）。
+
+<CalloutInfo>此步骤为可选，但推荐开启。</CalloutInfo>
+
+<DocImage src={integrateGithubAppImage} alt="Integrate GitHub app" />
+
+启用后，你将在每个拉取请求页面中，直接查看生成的预览与报告状态：
+
+<DocImage src={actionsPreviewImage} alt="Actions preview" />
+
+## 集成：GitLab Pipelines
+
+首先，在项目根目录下创建 `.gitlab-ci.yml` 文件，内容如下：
+
+```yaml filename='.gitlab-ci.yml'
+image: node:16
+
+stages:
+  - build
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - node_modules/
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: always
+    - if: $CI_COMMIT_BRANCH == "master" && $CI_PIPELINE_SOURCE == "push"
+      when: always
+    - when: never
+
+install_dependencies:
+  stage: build
+  script:
+    - npm ci
+
+publish_graph:
+  stage: build
+  needs:
+    - install_dependencies
+  script: npm run start
+  variables:
+    PUBLISH_GRAPH: 'true'
+    DEVTOOLS_API_KEY: 'CHANGE_THIS_TO_YOUR_API_KEY'
+```
+
+<CalloutInfo>
+类似于 GitHub Actions，该 CI 流程会在以下两种场景下自动执行：
+
+- 向 master 分支发起合并请求（Merge Request）时。
+- 直接推送到 master 分支时。
+
+请确保已将 DEVTOOLS_API_KEY 配置为 GitLab 项目的 CI/CD 变量。推荐通过 GitLab 的[项目 CI/CD 变量][gitlab-variables]功能安全地存储密钥。你可以在 [Devtools 设置页面][devtools-api-keys]生成对应的 API Key。
+
+</CalloutInfo>
+
+最后，在 `main.ts` 文件中更新 `publishOptions` 对象，以读取 GitLab 提供的相关环境变量：
+
+```ts filename='main.ts'
+const publishOptions = {
+  apiKey: process.env.DEVTOOLS_API_KEY,
+  repository: process.env.CI_PROJECT_NAME,
+  owner: process.env.CI_PROJECT_ROOT_NAMESPACE,
+  sha: process.env.CI_COMMIT_SHA,
+  target: process.env.CI_MERGE_REQUEST_DIFF_BASE_SHA,
+  trigger: process.env.CI_MERGE_REQUEST_DIFF_BASE_SHA ? 'pull' : 'push',
+  branch:
+    process.env.CI_COMMIT_BRANCH ??
+    process.env.CI_MERGE_REQUEST_SOURCE_BRANCH_NAME,
+}
+```
+
+## 其他 CI/CD 工具支持
+
+Nest Devtools 可灵活集成至任意 CI/CD 工具中，不局限于本文中演示的 GitLab Pipelines。常见工具包括 [Bitbucket Pipelines][bitbucket-pipelines]、[CircleCI][circleci] 等。
+
+在使用其他 CI/CD 服务时，你只需根据其提供的环境变量配置 `publishOptions` 对象。大多数所需字段（如分支名、提交哈希、项目名称等）通常可通过其内置环境变量获取。你可以参考以下文档，查找相应变量名：
+
+- [CircleCI 内置环境变量][circleci-variables]
+- [Bitbucket 变量与密钥文档][bitbucket-variables]
+
+在设计发布依赖图的流水线触发策略时，推荐采用以下规则：
+
+- **Push 事件**：仅在推送到部署相关分支（如 `master`、`main`、`staging`、`production` 等）时触发。
+- **Pull Request 事件**：始终触发，或仅在目标分支为部署分支时触发。
+
+<CalloutInfo type="success" title="建议">
+  合理配置触发条件有助于减少不必要的构建任务，提高流水线效率。
+</CalloutInfo>
+
+{/* 引用链接 */}
+[devtools-website]: https://devtools.nestjs.com
+[github-secrets-docs]: https://docs.github.com/en/actions/security-guides/encrypted-secrets#creating-encrypted-secrets-for-a-repository
+[devtools-api-keys]: https://devtools.nestjs.com/settings/manage-api-keys
+[gitlab-variables]: https://docs.gitlab.com/ee/ci/variables/#add-a-cicd-variable-to-a-project
+[bitbucket-pipelines]: https://bitbucket.org/product/features/pipelines
+[circleci]: https://circleci.com/
+[circleci-variables]: https://circleci.com/docs/variables/#built-in-environment-variables
+[bitbucket-variables]: https://support.atlassian.com/bitbucket-cloud/docs/variables-and-secrets/

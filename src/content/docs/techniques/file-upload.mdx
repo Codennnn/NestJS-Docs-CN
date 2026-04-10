@@ -1,0 +1,368 @@
+# 文件上传
+
+Nest 提供了一个专用模块用于处理文件上传，其底层基于 [Multer 中间件](https://github.com/expressjs/multer)（适用于 Express 框架）。Multer 负责解析 `multipart/form-data` 格式的请求体，这是通过 HTTP `POST` 方法上传文件时的标准格式。
+
+该模块支持高度自定义，可根据具体业务场景灵活配置上传行为。
+
+<CalloutInfo type="warning">
+  Multer **仅支持** `multipart/form-data`
+  格式，无法处理其他类型的请求体。同时，该模块**不兼容 `FastifyAdapter`**。
+</CalloutInfo>
+
+为了提升类型安全，建议为 Multer 安装对应的类型定义：
+
+```bash
+npm install -D @types/multer
+```
+
+安装后，即可通过如下方式引入类型：
+
+```ts
+import { Express } from 'express'
+
+// 使用示例
+const file: Express.Multer.File
+```
+
+## 基础示例：上传单个文件
+
+要实现单文件上传，你只需在控制器方法中使用 `FileInterceptor()` 拦截器，并通过 `@UploadedFile()` 装饰器提取上传的文件对象：
+
+```ts
+import { FileInterceptor } from '@nestjs/platform-express'
+import { Post, UploadedFile, UseInterceptors } from '@nestjs/common'
+
+@Post('upload')
+@UseInterceptors(FileInterceptor('file'))
+uploadFile(@UploadedFile() file: Express.Multer.File) {
+  console.log(file)
+}
+```
+
+`FileInterceptor()` 接收两个参数：
+
+- `fieldName`：字符串类型，指定表单字段名，即 `<input type="file" name="file" />` 中的 `name` 值。
+- `options`（可选）：类型为 [`MulterOptions`](https://github.com/expressjs/multer#multeropts)，用于配置上传行为，底层与 Multer 的构造函数参数一致。
+
+<CalloutInfo type="warning">
+  某些云服务平台（如 Google Firebase）在底层处理上可能与 `FileInterceptor()`
+  存在兼容性问题，使用时请注意测试验证。
+</CalloutInfo>
+
+## 文件校验
+
+在处理文件上传时，通常需要对文件的元信息进行校验，例如文件大小或 MIME 类型。为此，你可以创建自定义管道，并应用于使用 `@UploadedFile()` 装饰器标记的参数上。以下是一个简单的示例，展示如何实现自定义的文件大小校验管道：
+
+```ts
+import { PipeTransform, Injectable, ArgumentMetadata } from '@nestjs/common'
+
+@Injectable()
+export class FileSizeValidationPipe implements PipeTransform {
+  transform(value: any, metadata: ArgumentMetadata) {
+    // value 是一个包含文件数据的对象
+    const oneKb = 1000
+
+    if (value.size >= oneKb) {
+      throw new Error('文件大小不能超过 1KB')
+    }
+
+    return value
+  }
+}
+```
+
+你可以将该管道与 `FileInterceptor` 拦截器配合使用，如下所示：
+
+```ts
+@Post('file')
+@UseInterceptors(FileInterceptor('file'))
+uploadFileAndValidate(
+  @UploadedFile(
+    new FileSizeValidationPipe(),
+    // 这里还可以添加其他管道
+  ) file: Express.Multer.File,
+) {
+  return file
+}
+```
+
+为了更方便地处理常见场景，Nest 提供了一个内置管道 `ParseFilePipe`，可用于组合多个文件校验逻辑，其基本用法如下：
+
+```ts
+@Post('file')
+uploadFileAndPassValidation(
+  @Body() body: SampleDto,
+  @UploadedFile(
+    new ParseFilePipe({
+      validators: [
+        // 在此添加文件校验器实例
+      ],
+    })
+  )
+  file: Express.Multer.File,
+) {
+  return {
+    body,
+    file: file.buffer.toString(),
+  }
+}
+```
+
+如上所示，你可以通过 `validators` 参数传入一个 `FileValidator` 实例数组，`ParseFilePipe` 会依次执行这些校验器。
+
+此外，该管道还支持两个可选参数：
+
+| 参数                  | 描述                                                                            |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `errorHttpStatusCode` | 指定当**任意**一个校验器失败时抛出的 HTTP 状态码，默认值为 400（Bad Request）。 |
+| `exceptionFactory`    | 一个工厂函数，用于自定义错误对象的构建逻辑，接收错误信息作为参数。              |
+
+### 内置验证器
+
+Nest 提供了两个常用的文件校验器实现，可直接使用：
+
+- `MaxFileSizeValidator`：校验文件大小是否小于指定值（单位为字节）。
+- `FileTypeValidator`：校验文件的 MIME 类型是否符合指定规则（支持字符串或正则表达式）。默认情况下，会基于文件的 [magic number](https://www.ibm.com/support/pages/what-magic-number) 进行类型识别，而不仅仅依赖文件扩展名。
+
+以下示例演示了如何将它们与 `ParseFilePipe` 配合使用：
+
+```ts
+@UploadedFile(
+  new ParseFilePipe({
+    validators: [
+      new MaxFileSizeValidator({ maxSize: 1000 }),
+      new FileTypeValidator({ fileType: 'image/jpeg' }),
+    ],
+  }),
+)
+file: Express.Multer.File,
+```
+
+<CalloutInfo type="success">
+  当验证器配置较多时，建议将它们单独定义为常量（如
+  `fileValidators`），再在管道中引入使用，代码会更清晰易维护。
+</CalloutInfo>
+
+### 自定义文件验证器
+
+除了使用内置的文件验证器，你也可以实现自己的 `FileValidator` 类。以下是 `FileValidator` 抽象类的定义：
+
+```ts
+export abstract class FileValidator<TValidationOptions = Record<string, any>> {
+  constructor(protected readonly validationOptions: TValidationOptions) {}
+
+  /**
+   * 根据配置项校验文件是否合法。
+   * @param file 请求中上传的文件
+   */
+  abstract isValid(file?: Express.Multer.File): boolean | Promise<boolean>
+
+  /**
+   * 构建验证失败时的错误信息。
+   * @param file 请求中上传的文件
+   */
+  abstract buildErrorMessage(file: Express.Multer.File): string
+}
+```
+
+<CalloutInfo>
+  `isValid` 方法支持异步逻辑。默认情况下，Nest 使用 Express
+  作为底层框架，因此你可以将 `file` 参数类型显式声明为
+  `Express.Multer.File`，以获得更好的类型提示。
+</CalloutInfo>
+
+### 使用 `ParseFilePipeBuilder` 构建验证逻辑
+
+如果想手动实例化每个校验器，可使用 `ParseFilePipeBuilder` 类，通过链式调用方式添加验证规则并构建管道：
+
+```ts
+@UploadedFile(
+  new ParseFilePipeBuilder()
+    .addFileTypeValidator({ fileType: 'jpeg' })
+    .addMaxSizeValidator({ maxSize: 1000 })
+    .build({
+      errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+    }),
+)
+file: Express.Multer.File,
+```
+
+<CalloutInfo>
+  默认情况下，文件为必填项。如果希望文件为可选项，可以在 `build()`
+  方法的配置中添加 `fileIsRequired: false` 参数（与 `errorHttpStatusCode`
+  同级）。
+</CalloutInfo>
+
+## 上传多个文件（文件数组）
+
+如果你需要上传多个文件，并且这些文件对应同一个字段名（即「文件数组」），可以使用 `FilesInterceptor()` 装饰器（注意其名称中的复数 `Files`）。该装饰器接收以下三个参数：
+
+- `fieldName`：字段名称（与前端 `FormData` 中的字段名一致）
+- `maxCount`（可选）：允许上传的最大文件数
+- `options`（可选）：一个 `MulterOptions` 对象，配置项详见前文
+
+使用 `FilesInterceptor()` 后，可以通过 `@UploadedFiles()` 装饰器获取上传的文件数组：
+
+```ts
+@Post('upload')
+@UseInterceptors(FilesInterceptor('files'))
+uploadFile(@UploadedFiles() files: Array<Express.Multer.File>) {
+  console.log(files)
+}
+```
+
+<CalloutInfo>
+  `FilesInterceptor()` 装饰器由 `@nestjs/platform-express`
+  包提供，`@UploadedFiles()` 装饰器则来自 `@nestjs/common`。
+</CalloutInfo>
+
+## 多字段多文件上传
+
+当你需要上传多个字段的文件（即字段名各不相同）时，可以使用 `FileFieldsInterceptor()` 装饰器。它用于拦截并处理带有多个文件字段的表单请求，接受两个参数：
+
+- `uploadedFields`：字段配置数组。每个元素是一个对象，必须包含 `name` 属性（指定字段名），并可选地包含 `maxCount` 属性（限制该字段最多上传的文件数量）。
+- `options`（可选）：`MulterOptions` 类型的配置对象，用于定制上传行为（例如设置存储位置、文件过滤规则等）。
+
+配合使用 `FileFieldsInterceptor()` 后，可以通过 `@UploadedFiles()` 装饰器从请求中获取上传的文件，返回结果是一个对象，包含各个字段对应的文件数组。
+
+例如：
+
+```ts
+@Post('upload')
+@UseInterceptors(FileFieldsInterceptor([
+  { name: 'avatar', maxCount: 1 },
+  { name: 'background', maxCount: 1 },
+]))
+uploadFile(
+  @UploadedFiles()
+  files: {
+    avatar?: Express.Multer.File[]
+    background?: Express.Multer.File[]
+  },
+) {
+  console.log(files)
+}
+```
+
+上例中，客户端可同时上传名为 `avatar` 和 `background` 的文件字段，服务端将其分别提取为 `files.avatar` 和 `files.background`。
+
+## 任意字段的文件上传
+
+若需处理来自任意字段（字段名不限）的文件上传，可使用 `AnyFilesInterceptor()` 装饰器。该装饰器支持接收一个可选的配置对象 `options`，详细说明可参考[前文](#多字段多文件上传)。
+
+搭配 `@UploadedFiles()` 装饰器使用时，可以方便地从请求中提取上传的文件列表。例如：
+
+```ts
+@Post('upload')
+@UseInterceptors(AnyFilesInterceptor())
+uploadFile(@UploadedFiles() files: Array<Express.Multer.File>) {
+  console.log(files)
+}
+```
+
+## 不接收文件的表单数据
+
+如果你希望接收 `multipart/form-data`（多部分表单数据），但明确不允许包含任何文件上传，可以使用 `NoFilesInterceptor` 拦截器。该拦截器会自动将 `multipart` 表单中的字段提取并挂载到请求体中（`req.body`）。
+一旦请求中包含任何文件字段，将抛出 `BadRequestException` 异常。
+
+```ts
+@Post('upload')
+@UseInterceptors(NoFilesInterceptor())
+handleMultiPartData(@Body() body) {
+  console.log(body)
+}
+```
+
+## 配置的默认选项
+
+正如上文所示，文件拦截器允许你传入 `Multer` 的配置项。如果你希望为整个应用设置默认的 `Multer` 配置，可以在导入 `MulterModule` 时调用其静态方法 `register()`，并传入相应选项。
+
+```ts
+import { MulterModule } from '@nestjs/platform-express'
+
+MulterModule.register({
+  dest: './upload',
+})
+```
+
+你可以在 [Multer 官方文档](https://github.com/expressjs/multer#multeropts)中查看所有支持的配置项。
+
+## 异步配置
+
+如果你希望以异步方式（而非静态方式）配置 `MulterModule`，可以使用 `registerAsync()` 方法。和大多数动态模块一样，Nest 提供了多种方式来支持异步配置。
+
+### 使用工厂函数
+
+最常见的方式是通过工厂函数提供配置项：
+
+```ts
+MulterModule.registerAsync({
+  useFactory: () => ({
+    dest: './upload',
+  }),
+})
+```
+
+类似于其他[工厂提供者](/fundamentals/custom-providers#工厂提供者usefactory)，该工厂函数可以是 `async` 的，并支持通过 `inject` 注入依赖：
+
+```ts
+MulterModule.registerAsync({
+  imports: [ConfigModule],
+  useFactory: async (configService: ConfigService) => ({
+    dest: configService.get<string>('MULTER_DEST'),
+  }),
+  inject: [ConfigService],
+})
+```
+
+### 使用配置类
+
+除了工厂函数，也可以通过自定义类来提供配置：
+
+```ts
+MulterModule.registerAsync({
+  useClass: MulterConfigService,
+})
+```
+
+在上述写法中，`MulterModule` 会自动实例化 `MulterConfigService`，并调用其 `createMulterOptions()` 方法以获取配置对象。该类必须实现 `MulterOptionsFactory` 接口，示例如下：
+
+```ts
+@Injectable()
+class MulterConfigService implements MulterOptionsFactory {
+  createMulterOptions(): MulterModuleOptions {
+    return {
+      dest: './upload',
+    }
+  }
+}
+```
+
+### 使用已有提供者
+
+如果你希望复用已存在的配置服务，而不是在 `MulterModule` 内部重新实例化，可以使用 `useExisting`：
+
+```ts
+MulterModule.registerAsync({
+  imports: [ConfigModule],
+  useExisting: ConfigService,
+})
+```
+
+### 提供额外的依赖项
+
+`registerAsync()` 还支持传入 `extraProviders`，用于注入额外的依赖项。这些提供者会被合并到模块的依赖中：
+
+```ts
+MulterModule.registerAsync({
+  imports: [ConfigModule],
+  useClass: ConfigService,
+  extraProviders: [MyAdditionalProvider],
+})
+```
+
+当你的工厂函数或类依赖于其他服务时，这种方式非常实用。
+
+## 示例参考
+
+你可以查看[官方示例项目](https://github.com/nestjs/nest/tree/master/sample/29-file-upload)获取完整示例代码。

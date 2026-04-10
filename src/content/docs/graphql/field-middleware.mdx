@@ -1,0 +1,107 @@
+# 字段中间件（Field Middleware）
+
+<CalloutInfo type="warning">
+
+本章节仅适用于代码优先（code first）方式。
+
+</CalloutInfo>
+
+字段中间件允许你在某个字段被解析前或解析后执行任意代码。你可以使用字段中间件来转换字段的结果、校验字段参数，甚至进行字段级别的角色检查（例如，只有满足条件的用户才能访问某个字段）。
+
+你可以为一个字段绑定多个中间件函数。在这种情况下，这些中间件会按照 `middleware` 数组中的顺序依次调用。第一个中间件是「最外层」，因此它会最先执行，也会最后执行（类似于 `graphql-middleware` 包的行为）。第二个中间件是「第二外层」，因此会第二个执行，也会倒数第二个执行。
+
+## 快速上手
+
+我们先来创建一个简单的中间件，在字段值返回给客户端之前进行日志记录：
+
+```ts
+import { FieldMiddleware, MiddlewareContext, NextFn } from '@nestjs/graphql'
+
+const loggerMiddleware: FieldMiddleware = async (
+  ctx: MiddlewareContext,
+  next: NextFn
+) => {
+  const value = await next()
+  console.log(value)
+  return value
+}
+```
+
+<CalloutInfo>
+  `MiddlewareContext`（中间件上下文）对象包含了 GraphQL
+  解析器函数通常接收的所有参数（`
+  {(source, args, context, info)}`），而
+  `NextFn`（下一个中间件函数）是一个函数，用于执行下一个绑定到该字段的中间件，或者实际的字段解析器。
+</CalloutInfo>
+
+<CalloutInfo type="warning">
+  字段中间件函数无法注入依赖，也无法访问 Nest
+  的依赖注入容器，因为它们设计为非常轻量级，不应执行任何可能耗时的操作（如从数据库获取数据）。如果你需要调用外部服务或查询数据源，建议在绑定到根查询/变更处理器的守卫或拦截器中处理，并将结果赋值到
+  `context` 对象中，然后可以在字段中间件（具体来说，在 `MiddlewareContext`
+  对象中）访问。
+</CalloutInfo>
+
+需要注意的是，字段中间件必须符合 `FieldMiddleware` 接口。在上面的示例中，我们首先运行 `next()` 函数（它会执行实际的字段解析器并返回字段值），然后将该值输出到终端。同时，中间件函数返回的值会完全覆盖之前的值。由于我们不需要修改值，所以直接返回原始值。
+
+有了这些准备后，我们可以直接在 `@Field()` 装饰器中注册中间件，如下所示：
+
+```ts
+@ObjectType()
+export class Recipe {
+  @Field({ middleware: [loggerMiddleware] })
+  title: string
+}
+```
+
+现在，每当我们请求 `Recipe` 对象类型的 `title` 字段时，原始字段值都会被输出到控制台。
+
+<CalloutInfo>
+  <div>
+    如果你想了解如何结合[扩展（extensions）](/graphql/extensions)
+    功能实现字段级权限系统，请参考本[章节](/graphql/extensions#使用自定义元数据)。
+  </div>
+</CalloutInfo>
+
+<CalloutInfo type="warning">
+  字段中间件只能应用于 `ObjectType` 类。更多细节可参考此
+  [issue](https://github.com/nestjs/graphql/issues/2446)。
+</CalloutInfo>
+
+如上所述，我们也可以在中间件函数中控制字段的值。例如，下面的代码会将菜谱标题（如果存在）自动转为大写：
+
+```ts
+const value = await next()
+return value?.toUpperCase()
+```
+
+这样，每当请求标题时，都会自动转为大写。
+
+同样，你也可以将字段中间件绑定到自定义字段解析器（即使用 `@ResolveField()` 装饰器的方法），如下所示：
+
+```ts
+@ResolveField(() => String, { middleware: [loggerMiddleware] })
+title() {
+  return 'Placeholder'
+}
+```
+
+<CalloutInfo type="warning">
+  如果在字段解析器级别启用了增强器（enhancer）（[详细说明](/graphql/other-features#在字段解析器级别执行增强器)），字段中间件会在任何绑定到该方法的拦截器、守卫等之前执行（但会在为查询或变更处理器注册的根级增强器之后执行）。
+</CalloutInfo>
+
+## 全局字段中间件
+
+除了可以将中间件直接绑定到特定字段外，你还可以全局注册一个或多个字段中间件函数。在这种情况下，这些中间件会自动应用于所有对象类型的字段。
+
+```ts
+GraphQLModule.forRoot({
+  autoSchemaFile: 'schema.gql',
+  buildSchemaOptions: {
+    fieldMiddleware: [loggerMiddleware],
+  },
+}),
+```
+
+<CalloutInfo>
+  全局注册的字段中间件函数会在本地注册的中间件（即直接绑定到特定字段的中间件）**之前**执行。
+</CalloutInfo>

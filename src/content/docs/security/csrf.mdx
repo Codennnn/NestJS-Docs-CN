@@ -1,0 +1,65 @@
+# CSRF 防护
+
+**跨站请求伪造**（Cross-Site Request Forgery，简称 CSRF，有时也称为 XSRF）是一种攻击方式，攻击者诱使已认证用户在当前 Web 应用中执行非本意的操作。为了防止此类攻击，你可以根据项目所使用的 HTTP 平台（Express 或 Fastify），选择合适的 CSRF 防护方案。
+
+## Express 环境下的防护方案
+
+首先安装 `csrf-csrf` 中间件：
+
+```bash
+npm install csrf-csrf
+```
+
+<CalloutInfo>
+  `csrf-csrf` 依赖于 `express-session` 或
+  `cookie-parser`，请确保在应用中已正确配置其中之一。
+</CalloutInfo>
+
+安装完成后，你需要通过 `doubleCsrf` 函数创建中间件并将其注册为全局中间件：
+
+```ts
+import { doubleCsrf } from 'csrf-csrf'
+
+// 建议将密钥保存在环境变量中，切勿硬编码
+const doubleCsrfOptions = {
+  secret: process.env.CSRF_SECRET,
+  // 可选配置项详见官方文档
+}
+
+const {
+  doubleCsrfProtection, // 默认提供的 CSRF 防护中间件
+  generateToken, // 可用于手动生成 CSRF Token，常见于前端请求初始化
+  validateRequest, // 手动验证 CSRF Token，可用于自定义中间件
+  invalidCsrfTokenError, // Token 校验失败时抛出的错误，可用于统一异常处理
+} = doubleCsrf(doubleCsrfOptions)
+
+app.use(doubleCsrfProtection)
+```
+
+## Fastify 环境下的防护方案
+
+Fastify 推荐使用官方提供的 [`@fastify/csrf-protection`](https://github.com/fastify/csrf-protection#usage) 插件。安装命令如下：
+
+```bash
+npm install @fastify/csrf-protection
+```
+
+<CalloutInfo type="warning">
+  `@fastify/csrf-protection` 依赖于会话管理插件，如 `@fastify/session` 或
+  `@fastify/secure-session`，务必确保在注册 CSRF 插件之前完成会话插件的配置。
+</CalloutInfo>
+
+使用示例如下：
+
+```ts
+import fastifySession from '@fastify/session' // 使用 @fastify/session 管理会话
+import fastifyCsrf from '@fastify/csrf-protection'
+
+// 先注册会话插件
+await app.register(fastifySession, {
+  secret: 'a secret with minimum 32 characters',
+})
+
+// 再注册 CSRF 防护插件
+await app.register(fastifyCsrf)
+```

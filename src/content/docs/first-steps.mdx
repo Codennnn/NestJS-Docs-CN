@@ -1,0 +1,149 @@
+# 快速上手
+
+本系列文章将系统地带你掌握 Nest 框架的核心基础知识。为了帮助你尽快上手，我们将通过构建一个基础的 CRUD 应用，逐步讲解 Nest 应用的关键构建模块，涵盖入门阶段常见的功能和特性。
+
+## 开发语言
+
+我们热爱 TypeScript，同时也充分受益于 Node.js 丰富且活跃的生态系统。Nest 天生支持 TypeScript，也兼容原生 JavaScript。但由于 Nest 深度依赖现代语言特性，若你选择使用 JavaScript，建议配合 [Babel 编译器](https://babeljs.io/)使用，以获得更好的兼容性与开发体验。
+
+## 环境准备
+
+开始之前，请确保你的系统已安装 [Node.js](https://nodejs.org)（版本 ≥ 20）。
+
+## 创建新项目
+
+使用 [Nest CLI](/cli/overview) 脚手架工具可以快速初始化一个全新的 Nest 项目。在开始之前，请确保系统已安装 [npm](https://www.npmjs.com/)。然后在终端中运行以下命令：
+
+```bash
+# 安装依赖
+npm install -g @nestjs/cli
+
+# 创建项目
+# [!code word:project-name:1]
+nest new project-name
+#        ^^^^^^^^^^^^ 这里可以填写你想要的项目名称
+```
+
+<CalloutInfo>
+  若希望项目启用 TypeScript 的
+  [严格模式](https://www.typescriptlang.org/tsconfig#strict)，可以在创建时添加
+  `--strict` 参数：`nest new project-name --strict`
+</CalloutInfo>
+
+执行以上命令后，CLI 会创建一个名为 `project-name` 的目录，自动安装依赖并生成项目的基础结构，包括 `src/` 目录及多个核心文件。
+
+<FileTree
+  data={[
+    {
+      name: 'src',
+      children: [
+        { name: 'app.controller.spec.ts' },
+        { name: 'app.controller.ts' },
+        { name: 'app.module.ts' },
+        { name: 'app.service.ts' },
+        { name: 'main.ts' },
+      ],
+    },
+  ]}
+/>
+
+这些文件的基本职责如下：
+
+| 文件                     | 描述                                                      |
+| ------------------------ | --------------------------------------------------------- |
+| `app.controller.ts`      | 应用的基础控制器，定义了一个简单的路由处理器。            |
+| `app.controller.spec.ts` | 控制器的单元测试文件。                                    |
+| `app.module.ts`          | 应用的根模块，是模块系统的入口。                          |
+| `app.service.ts`         | 提供业务逻辑的基础服务类。                                |
+| `main.ts`                | 应用的启动入口，通过 `NestFactory` 创建并启动 Nest 实例。 |
+
+`main.ts` 文件包含一个异步函数，用于**启动应用**：
+
+```ts filename='main.ts'
+import { NestFactory } from '@nestjs/core'
+import { AppModule } from './app.module'
+
+// [!code highlight:4]
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule)
+  await app.listen(process.env.PORT ?? 3000)
+}
+```
+
+在这个示例中，`NestFactory` 是 Nest 提供的一个核心类，用于创建应用实例。调用 `create()` 方法会返回一个实现了 `INestApplication` 接口的对象，它封装了应用的生命周期管理与功能扩展能力。我们随后调用 `listen()` 启动 HTTP 服务器，开始接收外部请求。
+
+通过 Nest CLI 创建的项目默认采用模块化的目录结构。每个功能模块都被组织在各自独立的目录中，通常包含控制器（Controller）、服务（Service）以及模块定义文件（Module）。这种高内聚、低耦合的设计方式不仅体现了 Nest 的核心架构思想，也有助于团队协作、代码复用与系统扩展，是构建可维护、可扩展应用的推荐实践。
+
+<CalloutInfo>
+  默认情况下，如果应用在启动过程中发生异常，Nest 会以退出码 `1` 中止进程。若希望在错误发生时抛出异常而不是直接退出，可以通过设置 `abortOnError: false` 来关闭该行为，例如：`NestFactory.create(AppModule, { abortOnError: false })`。
+</CalloutInfo>
+
+## 多平台支持
+
+Nest 是一个平台无关的框架，旨在帮助开发者构建具有高度可复用性的逻辑模块，并能灵活地应用于不同类型的项目中。从架构角度来看，只要提供相应的适配器，Nest 就可以无缝集成到任意基于 Node.js 的 HTTP 框架中。
+
+目前，Nest 原生支持两种主流平台：[Express](https://expressjs.com/) 和 [Fastify](https://www.fastify.io/)，你可以根据具体的性能需求和项目特点自由选择。
+
+| 平台               | 描述                                                                                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `platform-express` | Express 是一款成熟稳定、生态丰富的轻量级 Web 框架，广泛应用于生产环境中。Nest 默认使用 `@nestjs/platform-express` 作为适配器，开箱即用，绝大多数场景下无需额外配置即可开始开发。        |
+| `platform-fastify` | Fastify 以高性能著称，强调低延迟和高吞吐，适合对响应速度要求较高的应用场景。如果你更关注服务性能，可以考虑选择 Fastify。具体使用方式可参考这篇[性能优化指南](/techniques/performance)。 |
+
+无论你选择哪种平台，Nest 都会提供对应的应用类型，例如 `NestExpressApplication` 或 `NestFastifyApplication`，用于支持底层平台的专有功能。
+
+在使用 `NestFactory.create()` 创建应用实例时，可以通过传入类型参数的方式获取平台专属的 API 接口，如下所示：
+
+```ts filename='main.ts'
+const app = await NestFactory.create<NestExpressApplication>(AppModule)
+```
+
+不过需要注意，除非你打算调用底层框架特有的方法，大多数情况下并不需要显式指定这个类型。
+
+## 启动与调试
+
+在完成依赖安装后，你只需在终端中运行以下命令，即可启动应用并开始监听 HTTP 请求：
+
+```bash
+npm run start
+```
+
+<CalloutInfo>
+  若希望显著加快开发阶段的构建速度（提升可达 20 倍），可在启动命令中追加 `-b swc` 参数，启用 [SWC 构建器](/recipes/swc)：`npm run start -b swc`
+
+SWC 是一个用 Rust 编写的高速编译器，能显著提升 TypeScript 转译和项目构建的效率，特别适合用于开发阶段。
+
+</CalloutInfo>
+
+该命令会启动一个 HTTP 服务器，监听的端口由 `src/main.ts` 文件中的配置决定。启动成功后，在浏览器中访问 `http://localhost:3000/`，你将看到 `Hello World!` 的响应页面。
+
+如果希望在开发过程中自动监听文件变更并实时重载应用，可使用以下命令：
+
+```bash
+npm run start:dev
+```
+
+此命令会自动监测源代码的改动，并在变更发生时重新编译与重启服务器，提升开发效率。
+
+## 代码规范与格式化工具
+
+Nest CLI 致力于为大型项目提供稳定、高效的开发体验。因此，在默认生成的项目中，已经集成了两大开发辅助工具：代码检查工具（ESLint）和代码格式化工具（Prettier）。
+
+- [ESLint](https://eslint.org/)：用于识别代码中的潜在错误、不规范写法以及不一致的编码风格，帮助提升代码质量。
+- [Prettier](https://prettier.io/)：专注于统一代码格式，降低团队协作中的风格差异，使代码更易读、更易维护。
+
+<CalloutInfo>
+  不确定 ESLint 和 Prettier
+  有何不同？你可以点击[这里](https://prettier.io/docs/en/comparison.html)了解两者在职责和功能上的详细对比。
+</CalloutInfo>
+
+为提升项目的可维护性与可扩展性，Nest 默认配置了基础的 ESLint 和 Prettier 支持。这些工具与主流 IDE（如 VS Code）拥有良好的集成体验，并可借助官方插件实现自动修复、即时提示等增强功能。
+
+在不依赖图形界面的开发环境中（如持续集成流程或 Git hooks），Nest 项目还提供了预设的 npm 脚本，便于通过命令行执行代码检查与格式化操作：
+
+```bash
+# 使用 ESLint 检查代码
+npm run lint
+
+# 使用 Prettier 格式化代码
+npm run format
+```

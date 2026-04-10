@@ -1,0 +1,58 @@
+# 生成 SDL
+
+<CalloutInfo type="warning">
+
+本章节仅适用于代码优先（code first）方式。
+
+</CalloutInfo>
+
+如果你希望手动生成 GraphQL SDL 模式（即无需运行应用程序、连接数据库、挂载解析器等），可以使用 `GraphQLSchemaBuilderModule`。
+
+```ts
+async function generateSchema() {
+  const app = await NestFactory.create(GraphQLSchemaBuilderModule)
+  await app.init()
+
+  const gqlSchemaFactory = app.get(GraphQLSchemaFactory)
+  const schema = await gqlSchemaFactory.create([RecipesResolver])
+  console.log(printSchema(schema))
+}
+```
+
+<CalloutInfo>
+  `GraphQLSchemaBuilderModule` 和 `GraphQLSchemaFactory` 均从 `@nestjs/graphql`
+  包中导入。`printSchema` 函数从 `graphql` 包中导入。
+</CalloutInfo>
+
+## 用法
+
+`gqlSchemaFactory.create()` 方法接收一个解析器（Resolver）类的引用数组。例如：
+
+```ts
+const schema = await gqlSchemaFactory.create([
+  RecipesResolver,
+  AuthorsResolver,
+  PostsResolvers,
+])
+```
+
+它还可以接收第二个可选参数，即标量类（Scalar Class）数组：
+
+```ts
+const schema = await gqlSchemaFactory.create(
+  [RecipesResolver, AuthorsResolver, PostsResolvers],
+  [DurationScalar, DateScalar]
+)
+```
+
+最后，你还可以传递一个选项对象：
+
+```ts
+const schema = await gqlSchemaFactory.create([RecipesResolver], {
+  skipCheck: true,
+  orphanedTypes: [],
+})
+```
+
+- `skipCheck`：是否跳过模式校验，布尔值，默认为 `false`
+- `orphanedTypes`：未被显式引用（不属于对象图）的类列表。通常，如果某个类被声明但未在对象图中被引用，则不会被包含在生成的模式中。该属性值为类引用数组。

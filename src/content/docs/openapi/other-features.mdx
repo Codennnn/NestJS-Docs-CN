@@ -1,0 +1,213 @@
+import swaggerCatsImage from '/public/assets/swagger-cats.png'
+import swaggerDogsImage from '/public/assets/swagger-dogs.png'
+
+# 其他功能
+
+本页介绍了一些 NestJS Swagger 模块提供的其他实用功能。
+
+## 全局前缀
+
+如果你的应用通过 `setGlobalPrefix()` 设置了全局前缀，但希望某些路由（例如根路径 `/`）忽略该前缀，可以将 `ignoreGlobalPrefix` 选项设置为 `true`：
+
+```ts
+const document = SwaggerModule.createDocument(app, options, {
+  ignoreGlobalPrefix: true,
+})
+```
+
+## 全局参数
+
+通过 `DocumentBuilder`，可以为所有路由统一添加全局参数。例如：
+
+```ts
+const config = new DocumentBuilder()
+  .addGlobalParameters({
+    name: 'tenantId',
+    in: 'header',
+  })
+  // 其他配置
+  .build()
+```
+
+## 全局响应
+
+你也可以使用 `DocumentBuilder` 为所有路由定义全局响应。例如，你可以为所有端点统一添加 `401 Unauthorized` 或 `500 Internal Server Error` 等错误响应：
+
+```ts
+const config = new DocumentBuilder()
+  .addGlobalResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  // 其他配置
+  .build()
+```
+
+## 多规范支持
+
+`SwaggerModule` 提供了多规范（Multiple specifications）支持。这意味着你可以在不同的 API 端点（endpoint）上，展示各自独立的 Swagger UI 界面。
+
+要启用此功能，你的应用需要采用模块化设计。具体实现方式是，在调用 `createDocument()` 方法时传入第三个参数 `extraOptions`。该对象中的 `include` 属性接收一个模块数组，用于指定当前 Swagger 规范应包含哪些模块。
+
+配置多规范的示例如下：
+
+```ts
+import { NestFactory } from '@nestjs/core'
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import { AppModule } from './app.module'
+import { CatsModule } from './cats/cats.module'
+import { DogsModule } from './dogs/dogs.module'
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule)
+
+  /**
+   * createDocument(application, configurationOptions, extraOptions)
+   *
+   * createDocument 方法可接收可选的第三个参数 `extraOptions`。
+   * 它是一个包含 `include` 属性的对象，通过该属性传入一个模块数组，
+   * 来指定当前 Swagger 规范应包含哪些模块。
+   *
+   * 例如，下面的代码会为 `CatsModule` 和 `DogsModule` 分别生成独立的 Swagger 规范，
+   * 并托管在不同的 UI 端点上。
+   */
+
+  const options = new DocumentBuilder()
+    .setTitle('Cats example')
+    .setDescription('The cats API description')
+    .setVersion('1.0')
+    .addTag('cats')
+    .build()
+
+  const catDocumentFactory = () =>
+    SwaggerModule.createDocument(app, options, {
+      include: [CatsModule],
+    })
+  SwaggerModule.setup('api/cats', app, catDocumentFactory)
+
+  const secondOptions = new DocumentBuilder()
+    .setTitle('Dogs example')
+    .setDescription('The dogs API description')
+    .setVersion('1.0')
+    .addTag('dogs')
+    .build()
+
+  const dogDocumentFactory = () =>
+    SwaggerModule.createDocument(app, secondOptions, {
+      include: [DogsModule],
+    })
+  SwaggerModule.setup('api/dogs', app, dogDocumentFactory)
+
+  await app.listen(process.env.PORT ?? 3000)
+}
+```
+
+运行以下命令启动服务器：
+
+```bash
+npm run start
+```
+
+访问 `http://localhost:3000/api/cats`，即可查看 Cats API 的 Swagger UI：
+
+<DocImage src={swaggerCatsImage} alt="Swagger Cats" />
+
+同样，`http://localhost:3000/api/dogs` 会展示 Dogs API 的 Swagger UI：
+
+<DocImage src={swaggerDogsImage} alt="Swagger Dogs" />
+
+## 在 Explorer 栏中使用下拉菜单
+
+如果希望在 Swagger UI 的 Explorer（探索器）边栏中，通过下拉菜单切换不同的 API 规范，你需要在 `SwaggerCustomOptions` 中将 `explorer` 设为 `true`，并配置 `swaggerOptions.urls` 属性。
+
+<CalloutInfo>
+  请确保 `swaggerOptions.urls` 中的地址指向各个规范的 JSON 文件。你可以通过
+  `SwaggerCustomOptions` 中的 `jsonDocumentUrl` 属性来指定 JSON
+  文件的路径。更多设置选项，请参见[相关章节](/openapi/introduction#配置选项)。
+</CalloutInfo>
+
+下面是在 Explorer 边栏中启用规范切换下拉菜单的示例：
+
+```ts
+import { NestFactory } from '@nestjs/core'
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger'
+import { AppModule } from './app.module'
+import { CatsModule } from './cats/cats.module'
+import { DogsModule } from './dogs/dogs.module'
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule)
+
+  // 主 API 配置项
+  const options = new DocumentBuilder()
+    .setTitle('Multiple Specifications Example')
+    .setDescription('Description for multiple specifications')
+    .setVersion('1.0')
+    .build()
+
+  // 创建主 API 文档
+  const document = SwaggerModule.createDocument(app, options)
+
+  // 配置主 API 的 Swagger UI，并支持下拉菜单
+  SwaggerModule.setup('api', app, document, {
+    explorer: true,
+    swaggerOptions: {
+      urls: [
+        {
+          name: '1. API',
+          url: 'api/swagger.json',
+        },
+        {
+          name: '2. Cats API',
+          url: 'api/cats/swagger.json',
+        },
+        {
+          name: '3. Dogs API',
+          url: 'api/dogs/swagger.json',
+        },
+      ],
+    },
+    jsonDocumentUrl: '/api/swagger.json',
+  })
+
+  // Cats API 配置项
+  const catOptions = new DocumentBuilder()
+    .setTitle('Cats Example')
+    .setDescription('Description for the Cats API')
+    .setVersion('1.0')
+    .addTag('cats')
+    .build()
+
+  // 创建 Cats API 文档
+  const catDocument = SwaggerModule.createDocument(app, catOptions, {
+    include: [CatsModule],
+  })
+
+  // 配置 Cats API 的 Swagger UI
+  SwaggerModule.setup('api/cats', app, catDocument, {
+    jsonDocumentUrl: '/api/cats/swagger.json',
+  })
+
+  // Dogs API 配置项
+  const dogOptions = new DocumentBuilder()
+    .setTitle('Dogs Example')
+    .setDescription('Description for the Dogs API')
+    .setVersion('1.0')
+    .addTag('dogs')
+    .build()
+
+  // 创建 Dogs API 文档
+  const dogDocument = SwaggerModule.createDocument(app, dogOptions, {
+    include: [DogsModule],
+  })
+
+  // 配置 Dogs API 的 Swagger UI
+  SwaggerModule.setup('api/dogs', app, dogDocument, {
+    jsonDocumentUrl: '/api/dogs/swagger.json',
+  })
+
+  await app.listen(3000)
+}
+```
+
+通过以上配置，应用将拥有一个主 API 文档和两个独立的子规范（Cats API 和 Dogs API），并且可以在 Swagger UI 的 Explorer 边栏中通过下拉菜单进行切换。

@@ -1,0 +1,83 @@
+:root {
+  --shiki-color-text: var(--foreground);
+  --shiki-color-background: transparent;
+  --shiki-token-constant: var(--primary);
+  --shiki-token-string: oklch(73% 0.13 149deg);
+  --shiki-token-comment: var(--muted-foreground);
+  --shiki-token-keyword: oklch(65% 0.2 27deg);
+  --shiki-token-parameter: oklch(61% 0.17 10deg);
+  --shiki-token-function: oklch(59% 0.21 327deg);
+  --shiki-token-string-expression: oklch(73% 0.13 149deg);
+  --shiki-token-punctuation: var(--muted-foreground);
+  --shiki-token-link: var(--primary);
+
+  &.dark {
+    --shiki-color-text: var(--foreground);
+    --shiki-color-background: transparent;
+    --shiki-token-constant: oklch(80% 0.14 217deg);
+    --shiki-token-string: oklch(81% 0.13 149deg);
+    --shiki-token-comment: var(--muted-foreground);
+    --shiki-token-keyword: oklch(78% 0.15 27deg);
+    --shiki-token-parameter: oklch(76% 0.14 10deg);
+    --shiki-token-function: oklch(74% 0.18 327deg);
+    --shiki-token-string-expression: oklch(81% 0.13 149deg);
+    --shiki-token-punctuation: var(--muted-foreground);
+    --shiki-token-link: var(--primary);
+
+    /*
+      以下样式用于在暗色模式下统一 shiki 代码高亮的样式。
+      !important 用于确保这些样式优先级最高，不被其他样式覆盖。
+    */
+    .shiki,
+    .shiki span {
+      font-weight: var(--shiki-dark-font-weight) !important;
+      color: var(--shiki-dark) !important;
+      text-decoration: var(--shiki-dark-text-decoration) !important;
+      background-color: var(--shiki-dark-bg) !important;
+    }
+  }
+}
+
+pre.shiki {
+  --shiki-dark-bg: var(--color-muted) !important;
+
+  @apply overflow-x-auto px-4 py-3;
+
+  code {
+    @apply block text-sm;
+
+    /* counter-increment: step 0;
+    counter-reset: step;
+
+    .line::before {
+      content: counter(step);
+      counter-increment: step;
+      display: inline-block;
+      width: 1rem;
+      margin-right: 1.5rem;
+      color: rgb(115 138 148 / 40%);
+      text-align: right;
+    } */
+
+    .line {
+      @apply inline-block w-full;
+
+      &.highlighted,
+      .highlighted-word {
+        @apply bg-primary/5;
+      }
+    }
+  }
+}
+
+.twoslash-popup-container {
+  @apply hidden absolute bottom-0 left-0 translate-y-full z-10;
+}
+
+.twoslash-hover:hover {
+  @apply relative;
+
+  > .twoslash-popup-container {
+    @apply inline-block;
+  }
+}

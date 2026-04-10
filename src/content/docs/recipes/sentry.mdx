@@ -1,0 +1,143 @@
+# Sentry
+
+[Sentry](https://sentry.io) 是一个错误追踪与性能监控平台，可以帮助开发者实时发现、诊断并解决问题。本文将指导你如何将 Sentry 的 [NestJS SDK](https://docs.sentry.io/platforms/javascript/guides/nestjs/) 集成到 NestJS 应用中。
+
+## 安装
+
+首先，安装所需的依赖：
+
+```bash
+$ npm install @sentry/nestjs @sentry/profiling-node
+```
+
+<CalloutInfo>
+
+`@sentry/profiling-node` 是一个可选依赖，但我们推荐安装它以启用性能分析功能。
+
+</CalloutInfo>
+
+## 基本配置
+
+要开始使用 Sentry，你需要创建一个名为 `instrument.ts` 的文件，并确保它在应用启动时最先被加载。
+
+```ts filename='instrument.ts'
+const Sentry = require('@sentry/nestjs')
+const { nodeProfilingIntegration } = require('@sentry/profiling-node')
+
+// 确保在导入其他模块前调用！
+Sentry.init({
+  dsn: SENTRY_DSN,
+  integrations: [
+    // 启用性能分析集成
+    nodeProfilingIntegration(),
+  ],
+
+  // 设置 tracesSampleRate 为 1.0 以捕获 100% 的事务，用于性能监控。
+  // 在生产环境中，我们建议将其调整为较小的值。
+  tracesSampleRate: 1.0,
+
+  // 设置性能分析的采样率。
+  // 此采样率是相对于 tracesSampleRate 的。
+  profilesSampleRate: 1.0,
+})
+```
+
+然后，在你的 `main.ts` 文件中，确保 `instrument.ts` 是第一个被导入的模块：
+
+```ts filename='main.ts'
+import './instrument' // 确保最先导入！
+
+// 再导入其他模块
+import { NestFactory } from '@nestjs/core'
+import { AppModule } from './app.module'
+// ...
+```
+
+最后，在你的根模块（通常是 `AppModule`）中导入 `SentryModule`：
+
+```ts filename='app.module.ts'
+// ...
+import { SentryModule } from '@sentry/nestjs/setup'
+
+@Module({
+  imports: [
+    SentryModule.forRoot(),
+    // ...其他模块
+  ],
+  // ...
+})
+export class AppModule {}
+```
+
+## 异常处理
+
+如果你使用了全局异常过滤器来捕获所有未处理的异常（例如，通过 `app.useGlobalFilters()` 注册或在模块中提供并使用了无参数 `@Catch()` 装饰器的过滤器），你需要在其 `catch()` 方法上添加 `@SentryExceptionCaptured()` 装饰器。这个装饰器能确保所有被该过滤器捕获的未知异常都上报到 Sentry。
+
+```ts
+import { Catch, ExceptionFilter } from '@nestjs/common'
+import { SentryExceptionCaptured } from '@sentry/nestjs'
+
+@Catch()
+export class YourCatchAllExceptionFilter implements ExceptionFilter {
+  @SentryExceptionCaptured()
+  catch(exception, host): void {
+    // 你的实现代码
+  }
+}
+```
+
+默认情况下，`HttpException` 及其子类不会被上报，因为框架通常将它们视为预期的、可控的响应，而非意外错误。只有未被任何异常过滤器捕获的异常才会被自动上报。
+
+如果你没有设置自定义的全局异常过滤器，可以在根模块的 `providers` 中注册 Sentry 提供的 `SentryGlobalFilter`。它会自动捕获所有未被处理的异常，并将其上报到 Sentry。
+
+<CalloutInfo type="warning">
+
+`SentryGlobalFilter` 必须注册在所有其他过滤器之前，以确保它能第一个捕获异常。
+
+</CalloutInfo>
+
+```ts filename='app.module.ts'
+// ...
+import { APP_FILTER } from '@nestjs/core'
+import { SentryGlobalFilter } from '@sentry/nestjs/setup'
+
+@Module({
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: SentryGlobalFilter,
+    },
+    // ...其他 providers
+  ],
+})
+export class AppModule {}
+```
+
+## 源码映射与可读的堆栈追踪
+
+根据你的项目构建配置，Sentry 中显示的错误堆栈追踪信息可能经过了编译和压缩，导致难以直接对应到你的源代码。
+
+为了解决这个问题，你可以将源码映射（Source Maps）上传到 Sentry。我们推荐使用 Sentry Wizard 来自动化这个过程：
+
+```bash
+npx @sentry/wizard@latest -i sourcemaps
+```
+
+## 测试集成
+
+要验证 Sentry 集成是否正常工作，可以创建一个测试端点来主动抛出一个错误：
+
+```ts
+@Get('debug-sentry')
+getError() {
+  throw new Error('My first Sentry error!')
+}
+```
+
+当访问应用的 `/debug-sentry` 路由时，Sentry 中应该会立即出现一个新的错误报告。
+
+## 总结
+
+如需了解 Sentry NestJS SDK 的完整文档，包括高级配置选项和功能，请访问 [Sentry 官方文档](https://docs.sentry.io/platforms/javascript/guides/nestjs/)。
+
+Sentry 虽然强大，但 bug 仍需我们亲自解决。如果你在集成过程中遇到任何问题，欢迎在 [GitHub Issue](https://github.com/getsentry/sentry-javascript/issues) 上提出，或加入 [Discord](https://discord.com/invite/sentry) 社区寻求帮助。

@@ -1,0 +1,366 @@
+# Necord
+
+Necord 是一个功能强大的模块，它简化了 [Discord](https://discord.com) 机器人的开发，并且能够与你的 NestJS 应用无缝集成。
+
+<CalloutInfo>
+  Necord 是一个第三方软件包，并非由 NestJS
+  核心团队官方维护。如需寻求支持，请在[官方仓库](https://github.com/necordjs/necord)中提出问题。
+</CalloutInfo>
+
+## 安装
+
+首先，你需要安装 Necord 及其依赖包 [`Discord.js`](https://discord.js.org)。
+
+```bash
+npm install necord discord.js
+```
+
+## 用法
+
+要在项目中使用 Necord，你需要导入 `NecordModule` 并完成必要的配置。
+
+```ts filename='app.module.ts'
+import { Module } from '@nestjs/common'
+import { NecordModule } from 'necord'
+import { IntentsBitField } from 'discord.js'
+import { AppService } from './app.service'
+
+@Module({
+  imports: [
+    NecordModule.forRoot({
+      token: process.env.DISCORD_TOKEN,
+      intents: [IntentsBitField.Flags.Guilds],
+      development: [process.env.DISCORD_DEVELOPMENT_GUILD_ID],
+    }),
+  ],
+  providers: [AppService],
+})
+export class AppModule {}
+```
+
+<CalloutInfo>
+  你可以在[此处](https://discord.com/developers/docs/topics/gateway#gateway-intents)查看所有可用的
+  `intents` 列表。
+</CalloutInfo>
+
+完成以上配置后，你就可以在 `providers` 中注入 `AppService`，从而轻松地注册命令和事件等功能。
+
+```ts filename='app.service.ts'
+import { Injectable, Logger } from '@nestjs/common'
+import { Context, On, Once, ContextOf } from 'necord'
+import { Client } from 'discord.js'
+
+@Injectable()
+export class AppService {
+  private readonly logger = new Logger(AppService.name)
+
+  @Once('ready')
+  public onReady(@Context() [client]: ContextOf<'ready'>) {
+    this.logger.log(`机器人已登录为 ${client.user.username}`)
+  }
+
+  @On('warn')
+  public onWarn(@Context() [message]: ContextOf<'warn'>) {
+    this.logger.warn(message)
+  }
+}
+```
+
+## 理解上下文（Context）
+
+你可能已经注意到上例中的 `@Context` 装饰器。该装饰器将事件的上下文（`context`）注入到方法中，以便访问各类与事件相关的数据。由于事件类型多样，`context` 的类型会通过 `ContextOf<T>` 泛型自动推断。只需在方法参数上使用 `@Context()` 装饰器，即可获取一个包含事件相关参数的数组。
+
+### 文本命令
+
+<CalloutInfo type="warning">
+  文本命令依赖于消息内容（Message Content），而对于已验证的、或已加入超过 100
+  个服务器的机器人，此功能即将被弃用。如果你的机器人无法访问消息内容，文本命令将无法正常工作。更多详情请参阅[官方说明](https://support-dev.discord.com/hc/en-us/articles/4404772028055-Message-Content-Access-Deprecation-for-Verified-Bots)。
+</CalloutInfo>
+
+下面是一个示例，展示了如何使用 `@TextCommand` 装饰器为消息创建一个简单的命令处理器：
+
+```ts filename='app.commands.ts'
+import { Injectable } from '@nestjs/common'
+import { Context, TextCommand, TextCommandContext, Arguments } from 'necord'
+
+@Injectable()
+export class AppCommands {
+  @TextCommand({
+    name: 'ping',
+    description: '以 Pong 作为回应！',
+  })
+  public onPing(
+    @Context() [message]: TextCommandContext,
+    @Arguments() args: string[]
+  ) {
+    return message.reply('Pong!')
+  }
+}
+```
+
+### 应用命令
+
+应用命令（Application Commands）为用户在 Discord 客户端中与应用交互提供了一种原生方式。应用命令分为三种类型，可通过不同的用户界面访问：聊天输入（Chat Input）、消息上下文菜单（通过右键单击消息访问）和用户上下文菜单（通过右键单击用户访问）。
+
+<DocImage src="https://i.imgur.com/4EmG8G8.png" alt="应用命令" />
+
+### 斜杠命令（Slash Commands）
+
+斜杠命令是与用户进行结构化互动的一种有效方式。通过它，你可以创建带有明确参数和选项的命令，从而显著提升用户体验。
+
+在 Necord 中，可以使用 `SlashCommand` 装饰器来定义斜杠命令。
+
+```ts filename='app.commands.ts'
+import { Injectable } from '@nestjs/common'
+import { Context, SlashCommand, SlashCommandContext } from 'necord'
+
+@Injectable()
+export class AppCommands {
+  @SlashCommand({
+    name: 'ping',
+    description: '以 Pong! 作为回应',
+  })
+  public async onPing(@Context() [interaction]: SlashCommandContext) {
+    return interaction.reply({ content: 'Pong!' })
+  }
+}
+```
+
+<CalloutInfo>
+  当机器人客户端登录时，所有已定义的命令都会自动注册。请注意，全局命令的缓存时间最长可达
+  1 小时。为避免全局缓存带来的延迟，建议在 Necord 模块配置中使用 `development`
+  参数，将命令的作用域限制在单个服务器（Guild）内进行测试。
+</CalloutInfo>
+
+## 选项（Options）
+
+你可以通过选项装饰器为斜杠命令定义参数。下面我们将创建一个 `TextDto` 类来说明此功能：
+
+```ts filename='text.dto.ts'
+import { StringOption } from 'necord'
+
+export class TextDto {
+  @StringOption({
+    name: 'text',
+    description: '在此输入文本',
+    required: true,
+  })
+  text: string
+}
+```
+
+然后，便可以在 `AppCommands` 类中使用此 DTO：
+
+```ts filename='app.commands.ts'
+import { Injectable } from '@nestjs/common'
+import { Context, SlashCommand, Options, SlashCommandContext } from 'necord'
+import { TextDto } from './length.dto'
+
+@Injectable()
+export class AppCommands {
+  @SlashCommand({
+    name: 'length',
+    description: '计算文本的长度',
+  })
+  public async onLength(
+    @Context() [interaction]: SlashCommandContext,
+    @Options() { text }: TextDto
+  ) {
+    return interaction.reply({
+      content: `文本的长度为：${text.length}`,
+    })
+  }
+}
+```
+
+如需查看所有内置的选项装饰器，请参考[官方文档](https://necord.org/interactions/slash-commands#options)。
+
+## 自动补全（Autocomplete）
+
+要为斜杠命令实现自动补全功能，你需要创建一个拦截器，用于处理用户输入时的自动补全请求。
+
+```ts filename='cats-autocomplete.interceptor.ts'
+import { Injectable } from '@nestjs/common'
+import { AutocompleteInteraction } from 'discord.js'
+import { AutocompleteInterceptor } from 'necord'
+
+@Injectable()
+class CatsAutocompleteInterceptor extends AutocompleteInterceptor {
+  public transformOptions(interaction: AutocompleteInteraction) {
+    const focused = interaction.options.getFocused(true)
+    let choices: string[]
+
+    if (focused.name === 'cat') {
+      choices = ['暹罗猫', '波斯猫', '缅因猫']
+    }
+
+    return interaction.respond(
+      choices
+        .filter((choice) => choice.startsWith(focused.value.toString()))
+        .map((choice) => ({ name: choice, value: choice }))
+    )
+  }
+}
+```
+
+你还需要在选项类中将 `autocomplete` 标记为 `true`：
+
+```ts filename='cat.dto.ts'
+import { StringOption } from 'necord'
+
+export class CatDto {
+  @StringOption({
+    name: 'cat',
+    description: '选择一个猫的品种',
+    autocomplete: true,
+    required: true,
+  })
+  cat: string
+}
+```
+
+最后，将此拦截器应用到你的斜杠命令上：
+
+```ts filename='cats.commands.ts'
+import { Injectable, UseInterceptors } from '@nestjs/common'
+import { Context, SlashCommand, Options, SlashCommandContext } from 'necord'
+import { CatDto } from '/cat.dto'
+import { CatsAutocompleteInterceptor } from './cats-autocomplete.interceptor'
+
+@Injectable()
+export class CatsCommands {
+  @UseInterceptors(CatsAutocompleteInterceptor)
+  @SlashCommand({
+    name: 'cat',
+    description: '获取指定猫品种的信息',
+  })
+  public async onSearch(
+    @Context() [interaction]: SlashCommandContext,
+    @Options() { cat }: CatDto
+  ) {
+    return interaction.reply({
+      content: `我找到了关于 ${cat} 品种的信息！`,
+    })
+  }
+}
+```
+
+### 用户上下文菜单
+
+用户命令会出现在右键单击（或轻触）用户时弹出的上下文菜单中，为用户提供了针对特定目标的快捷操作。
+
+```ts filename='app.commands.ts'
+import { Injectable } from '@nestjs/common'
+import { Context, UserCommand, UserCommandContext, TargetUser } from 'necord'
+import { User } from 'discord.js'
+
+@Injectable()
+export class AppCommands {
+  @UserCommand({ name: '获取头像' })
+  public async getUserAvatar(
+    @Context() [interaction]: UserCommandContext,
+    @TargetUser() user: User
+  ) {
+    return interaction.reply({
+      embeds: [
+        new MessageEmbed()
+          .setTitle(`${user.username} 的头像`)
+          .setImage(user.displayAvatarURL({ size: 4096, dynamic: true })),
+      ],
+    })
+  }
+}
+```
+
+### 消息上下文菜单
+
+消息命令会出现在右键单击消息时显示的上下文菜单中，方便你对该消息执行快捷操作。
+
+```ts filename='app.commands.ts'
+import { Injectable } from '@nestjs/common'
+import {
+  Context,
+  MessageCommand,
+  MessageCommandContext,
+  TargetMessage,
+} from 'necord'
+import { Message } from 'discord.js'
+
+@Injectable()
+export class AppCommands {
+  @MessageCommand({ name: '复制消息' })
+  public async copyMessage(
+    @Context() [interaction]: MessageCommandContext,
+    @TargetMessage() message: Message
+  ) {
+    return interaction.reply({ content: message.content })
+  }
+}
+```
+
+### 按钮（Buttons）
+
+[按钮](https://discord.com/developers/docs/interactions/message-components#buttons)是可以嵌入消息中的交互式元素。用户点击按钮后，会向你的应用发送一个[交互对象（Interaction）](https://discord.com/developers/docs/interactions/receiving-and-responding#interaction-object)。
+
+```ts filename='app.components.ts'
+import { Injectable } from '@nestjs/common'
+import { Context, Button, ButtonContext } from 'necord'
+
+@Injectable()
+export class AppComponents {
+  @Button('BUTTON')
+  public onButtonClick(@Context() [interaction]: ButtonContext) {
+    return interaction.reply({ content: '按钮已被点击！' })
+  }
+}
+```
+
+### 选择菜单（Select Menus）
+
+[选择菜单](https://discord.com/developers/docs/interactions/message-components#select-menus)是另一种消息内的交互式组件，用户可以通过下拉列表选择一个或多个选项。
+
+```ts filename='app.components.ts'
+import { Injectable } from '@nestjs/common'
+import {
+  Context,
+  StringSelect,
+  StringSelectContext,
+  SelectedStrings,
+} from 'necord'
+
+@Injectable()
+export class AppComponents {
+  @StringSelect('SELECT_MENU')
+  public onSelectMenu(
+    @Context() [interaction]: StringSelectContext,
+    @SelectedStrings() values: string[]
+  ) {
+    return interaction.reply({ content: `你选择了：${values.join('， ')}` })
+  }
+}
+```
+
+如需查看所有内置的选择菜单组件，请访问[此链接](https://necord.org/interactions/message-components#select-menu)。
+
+### 模态框（Modals）
+
+模态框是一种弹出式表单，允许用户提交结构化的输入。以下是一个示例，展示了如何使用 Necord 创建和处理模态框：
+
+```ts filename='app.modals.ts'
+import { Injectable } from '@nestjs/common'
+import { Context, Modal, ModalContext } from 'necord'
+
+@Injectable()
+export class AppModals {
+  @Modal('pizza')
+  public onModal(@Context() [interaction]: ModalContext) {
+    return interaction.reply({
+      content: `你最喜欢的披萨是：${interaction.fields.getTextInputValue('pizza')}`,
+    })
+  }
+}
+```
+
+## 更多信息
+
+如需了解更多详情，请访问 [Necord 官方网站](https://necord.org)。

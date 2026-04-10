@@ -1,0 +1,497 @@
+# 授权
+
+**授权**（Authorization）是指确定用户具有什么操作权限的过程。举个例子：管理员可以创建、编辑或删除帖子，而普通用户通常只能浏览内容。
+
+授权与**身份验证**（Authentication）是两个独立的概念。身份验证用于确认用户是谁，而授权则是在此基础上判断用户可以做什么。换句话说，授权往往依赖于身份验证提供的用户信息。
+
+在实际开发中，授权策略多种多样，具体选型应结合业务场景进行权衡与设计。本章节将介绍几种常见且适用于不同需求的授权实现方式。
+
+## 实现基础的 RBAC
+
+基于角色的访问控制（Role-based Access Control，简称 RBAC）是一种以**角色**为中心进行权限管理的控制策略，与具体的授权策略实现无关。本节将演示如何借助 Nest 的守卫机制，构建一个简单的 RBAC 方案。
+
+### 定义角色枚举
+
+首先，我们定义一个 `Role` 枚举类型，用于表示系统中支持的不同角色：
+
+```ts filename='role.enum.ts'
+export enum Role {
+  User = 'user',
+  Admin = 'admin',
+}
+```
+
+<CalloutInfo>
+  在实际项目中，角色信息通常来自数据库，或由外部身份认证服务（如 OAuth、OpenID
+  Connect）提供。
+</CalloutInfo>
+
+### 创建 `@Roles()` 装饰器
+
+接下来，我们实现一个自定义装饰器 `@Roles()`，用于为控制器方法标记所需的角色：
+
+```ts filename='roles.decorator.ts'
+import { SetMetadata } from '@nestjs/common'
+import { Role } from '../enums/role.enum'
+
+export const ROLES_KEY = 'roles'
+export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles)
+```
+
+### 应用装饰器到控制器方法
+
+定义好装饰器后，就可以将其应用于具体的路由处理器。例如，只有具有 `Admin` 角色的用户才能访问以下接口：
+
+```ts filename='cats.controller.ts'
+@Post()
+@Roles(Role.Admin)
+create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto)
+}
+```
+
+### 实现角色守卫
+
+要让 `@Roles()` 装饰器生效，我们需要创建一个守卫 `RolesGuard`，用于在请求时验证当前用户是否具有访问该路由所需的角色。
+
+这里我们借助 Nest 提供的 `Reflector` 工具类，获取控制器或处理器上定义的元数据：
+
+```ts filename='roles.guard.ts'
+import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common'
+import { Reflector } from '@nestjs/core'
+import { ROLES_KEY } from './roles.decorator'
+import { Role } from '../enums/role.enum'
+
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ])
+
+    if (!requiredRoles) {
+      return true
+    }
+
+    const { user } = context.switchToHttp().getRequest()
+
+    return requiredRoles.some((role) => user.roles?.includes(role))
+  }
+}
+```
+
+<CalloutInfo>
+  关于 `Reflector`
+  的更多用法，可参考[反射与元数据](/fundamentals/execution-context#反射与元数据)章节。
+</CalloutInfo>
+
+<CalloutInfo type="warning">
+  本示例仅在控制器处理器级别进行角色校验。在实际项目中，某些接口可能包含多个操作（如读取、创建、删除），每个操作所需权限不同。此时建议将权限校验逻辑细化到业务服务中，以实现更灵活的授权控制。
+</CalloutInfo>
+
+本示例假设 `request.user` 对象已包含用户实例及其角色信息（即 `roles` 属性）。
+通常，这些信息应由身份验证守卫（Authentication Guard）在用户登录后注入。
+
+### 用户模型示例
+
+确保你的 `User` 类中包含角色字段，例如：
+
+```ts
+class User {
+  // ...其他属性
+  roles: Role[]
+}
+```
+
+### 注册 `RolesGuard`
+
+为了使守卫生效，你需要在模块中注册它。可以选择局部注册（在控制器中）或全局注册：
+
+```ts
+providers: [
+  {
+    provide: APP_GUARD,
+    useClass: RolesGuard,
+  },
+],
+```
+
+当用户权限不足时，Nest 会自动返回以下响应：
+
+```json
+{
+  "statusCode": 403,
+  "message": "Forbidden resource",
+  "error": "Forbidden"
+}
+```
+
+<CalloutInfo>
+  如果你希望自定义错误响应内容，可以通过抛出自定义异常（如
+  `ForbiddenException`），替代直接返回布尔值。
+</CalloutInfo>
+
+## 基于声明的授权（Claims-based Authorization）
+
+在用户身份被认证后，可信任方可以为其附加一组声明（claim）。每条声明是一个「键-值对」，用于描述该用户所具备的权限或操作能力，而非仅仅描述其身份属性。
+
+在 Nest 中实现基于声明的授权，整体流程可参考上文的[基于角色的访问控制](#实现基础的-rbac)。两者的核心区别在于：
+
+- RBAC 检查用户角色是否匹配
+- 而声明式授权则检查用户是否拥有执行某操作所需的权限
+
+每个用户可以拥有多个权限，而每个受保护的资源或路由端点则定义所需权限。例如，可以通过自定义的 `@RequirePermissions()` 装饰器来声明访问要求：
+
+```ts filename='cats.controller.ts'
+@Post()
+@RequirePermissions(Permission.CREATE_CAT)
+create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto)
+}
+```
+
+<CalloutInfo>
+  在上述示例中，`Permission` 是一个枚举类型，类似于前文 RBAC 中使用的 `Role`
+  枚举，它用于集中定义系统中所有可分配的权限常量。
+</CalloutInfo>
+
+## 集成 CASL 权限控制库
+
+[CASL](https://casl.js.org/) 是一款同构（isomorphic）的权限管理库，可用于限制用户对资源的访问权限。它支持渐进式集成，既可以实现简单的声明式权限控制，也能满足复杂的基于属性的授权场景，适用于前后端通用的权限模型。
+
+### 安装依赖
+
+使用以下命令安装核心包：
+
+```bash
+npm install @casl/ability
+```
+
+<CalloutInfo>
+  本文以 CASL 为例演示权限控制的集成方式。你也可以根据项目需求选择其他库，如
+  `accesscontrol` 或 `acl`。
+</CalloutInfo>
+
+### 创建演示实体
+
+为演示权限逻辑，我们先定义两个实体类：`User` 和 `Article`。
+
+```ts
+class User {
+  id: number
+  isAdmin: boolean
+}
+```
+
+`User` 表示系统中的用户，包含唯一标识 `id` 和是否为管理员的标志 `isAdmin`。
+
+```ts
+class Article {
+  id: number
+  isPublished: boolean
+  authorId: number
+}
+```
+
+`Article` 表示一篇文章，包含唯一标识 `id`、是否已发布的状态 `isPublished` 以及作者 ID `authorId`。
+
+### 权限需求定义
+
+我们设定以下权限规则作为示例：
+
+- 管理员：拥有所有资源的创建、读取、更新、删除权限。
+- 普通用户：对所有内容只有只读权限。
+- 用户可以更新自己撰写的文章。
+- 已发布的文章不可删除。
+
+为了表示用户可以执行的操作，我们先定义一个枚举：
+
+```ts
+export enum Action {
+  Manage = 'manage',
+  Create = 'create',
+  Read = 'read',
+  Update = 'update',
+  Delete = 'delete',
+}
+```
+
+<CalloutInfo>`manage` 是 CASL 中的特殊关键字，表示「任意操作」。</CalloutInfo>
+
+### 封装 CASL 能力模块
+
+为了更好地在 Nest 应用中使用 CASL，我们创建一个专用模块和工厂类：
+
+```bash
+nest g module casl
+nest g class casl/casl-ability.factory
+```
+
+#### 创建权限能力工厂
+
+在 `CaslAbilityFactory` 中定义 `createForUser()` 方法，用于为指定用户生成权限能力对象：
+
+```ts
+import {
+  AbilityBuilder,
+  createMongoAbility,
+  InferSubjects,
+  MongoAbility,
+} from '@casl/ability'
+
+type Subjects = InferSubjects<typeof Article | typeof User> | 'all'
+
+export type AppAbility = MongoAbility<[Action, Subjects]>
+
+@Injectable()
+export class CaslAbilityFactory {
+  createForUser(user: User): AppAbility {
+    const { can, cannot, build } = new AbilityBuilder(createMongoAbility)
+
+    if (user.isAdmin) {
+      can(Action.Manage, 'all') // 管理员拥有所有权限
+    } else {
+      can(Action.Read, 'all') // 普通用户只读
+    }
+
+    can(Action.Update, Article, { authorId: user.id }) // 可更新自己撰写的文章
+    cannot(Action.Delete, Article, { isPublished: true }) // 禁止删除已发布文章
+
+    return build({
+      detectSubjectType: (item) =>
+        item.constructor as ExtractSubjectType<Subjects>,
+    })
+  }
+}
+```
+
+<CalloutInfo>`all` 是 CASL 中的特殊关键字，表示「所有主体」。</CalloutInfo>
+
+<CalloutInfo>
+  自 CASL v6 起，默认使用 `MongoAbility` 替代原始 `Ability`
+  类，用于支持基于条件的授权判断（语法风格类似 MongoDB 查询）。该类并不依赖
+  MongoDB，只借用了其查询表达式。
+</CalloutInfo>
+
+<CalloutInfo>
+  `detectSubjectType` 选项用于让 CASL
+  正确识别对象的「主体类型」，详情可查阅[官方文档](https://casl.js.org/v6/en/guide/subject-type-detection#use-classes-as-subject-types)。
+</CalloutInfo>
+
+在上述示例中，我们通过 `AbilityBuilder` 创建了 `MongoAbility` 实例。可以看到，`can` 和 `cannot` 方法参数相同但含义相反，`can` 用于授权，`cannot` 用于限制。两者最多可接收 4 个参数。详细用法请参考 [CASL 官方文档](https://casl.js.org/v6/en/guide/intro)。
+
+### 注册 CASL 模块
+
+将 `CaslAbilityFactory` 注册到模块中：
+
+```ts
+import { Module } from '@nestjs/common'
+import { CaslAbilityFactory } from './casl-ability.factory'
+
+@Module({
+  providers: [CaslAbilityFactory],
+  exports: [CaslAbilityFactory],
+})
+export class CaslModule {}
+```
+
+然后在需要用到权限判断的地方注入该工厂类：
+
+```ts
+constructor(private caslAbilityFactory: CaslAbilityFactory) {}
+
+const ability = this.caslAbilityFactory.createForUser(user)
+
+if (ability.can(Action.Read, 'all')) {
+  // 用户拥有读取权限
+}
+```
+
+### 权限示例
+
+假设当前用户不是管理员：
+
+```ts
+const user = new User()
+user.isAdmin = false
+
+const ability = this.caslAbilityFactory.createForUser(user)
+
+ability.can(Action.Read, Article) // ✅ true
+ability.can(Action.Delete, Article) // ❌ false
+ability.can(Action.Create, Article) // ❌ false
+```
+
+用户可读取所有内容，但无法创建或删除文章。
+
+若该用户尝试更新自己的文章：
+
+```ts
+const user = new User()
+user.id = 1
+
+const article = new Article()
+article.authorId = user.id
+
+const ability = this.caslAbilityFactory.createForUser(user)
+ability.can(Action.Update, article) // ✅ true
+
+article.authorId = 2
+ability.can(Action.Update, article) // ❌ false
+```
+
+<CalloutInfo>
+  虽然 `MongoAbility` 和 `AbilityBuilder` 都提供 `can` / `cannot` 方法，但
+  `AbilityBuilder` 用于定义权限规则，`MongoAbility` 用于实际执行权限检查。
+</CalloutInfo>
+
+### 小结
+
+通过封装 `CaslAbilityFactory`，我们可以灵活定义和应用权限规则，并与 NestJS 的依赖注入机制自然集成。在实际项目中，可以进一步将 `ability` 的判断逻辑封装为自定义守卫或管道，用于保护路由或资源。
+
+更多使用方式，请参考 [CASL 官方文档](https://casl.js.org/v6/en/guide/intro)。
+
+## 进阶：实现策略守卫
+
+本节将介绍如何实现一个更灵活的守卫，用于在方法级别（甚至可扩展到类级别）检查用户是否符合指定的**授权策略**（authorization policies）。我们以 CASL 为例进行演示，但你可以根据项目需求替换为任何合适的权限控制库。
+
+本示例依赖上一节定义的 `CaslAbilityFactory` 提供者，用于生成用户对应的权限能力对象（Ability）。
+
+### 背景与目标
+
+我们的目标是为每个路由处理器提供一种机制，允许开发者灵活地指定访问策略。支持两种形式：
+
+- 对象式策略处理器：实现了 `IPolicyHandler` 接口的类实例。
+- 函数式策略处理器：接受 `Ability` 作为参数的回调函数。
+
+### 定义策略处理器类型
+
+首先，定义策略处理器相关的接口与类型别名：
+
+```ts
+import { AppAbility } from '../casl/casl-ability.factory'
+
+interface IPolicyHandler {
+  handle(ability: AppAbility): boolean
+}
+
+type PolicyHandlerCallback = (ability: AppAbility) => boolean
+
+export type PolicyHandler = IPolicyHandler | PolicyHandlerCallback
+```
+
+策略处理器可以是一个实现了 `handle()` 方法的对象，也可以是一个返回布尔值的函数。
+
+### 创建装饰器：`@CheckPolicies()`
+
+接下来，我们实现一个装饰器，用于将策略处理器附加到指定的路由处理器上：
+
+```ts
+export const CHECK_POLICIES_KEY = 'check_policy'
+export const CheckPolicies = (...handlers: PolicyHandler[]) =>
+  SetMetadata(CHECK_POLICIES_KEY, handlers)
+```
+
+开发者可通过该装饰器，配置一个或多个策略检查逻辑。
+
+### 实现 `PoliciesGuard`
+
+接下来，我们实现核心守卫类 `PoliciesGuard`，用于在运行时提取并执行策略处理器：
+
+```ts
+@Injectable()
+export class PoliciesGuard implements CanActivate {
+  constructor(
+    private reflector: Reflector,
+    private caslAbilityFactory: CaslAbilityFactory
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const handlers =
+      this.reflector.get<PolicyHandler[]>(
+        CHECK_POLICIES_KEY,
+        context.getHandler()
+      ) || []
+
+    const { user } = context.switchToHttp().getRequest()
+    const ability = this.caslAbilityFactory.createForUser(user)
+
+    return handlers.every((handler) =>
+      this.executePolicyHandler(handler, ability)
+    )
+  }
+
+  private executePolicyHandler(
+    handler: PolicyHandler,
+    ability: AppAbility
+  ): boolean {
+    return typeof handler === 'function'
+      ? handler(ability)
+      : handler.handle(ability)
+  }
+}
+```
+
+<CalloutInfo title="说明">
+  此处假设请求对象中的 `user`
+  已通过身份验证过程注入。通常这是由自定义**身份验证守卫**完成的。详细内容可参考[身份验证](/security/authentication)章节。
+</CalloutInfo>
+
+### 使用方式示例
+
+你可以以函数形式内联定义策略处理器：
+
+```ts
+@Get()
+@UseGuards(PoliciesGuard)
+@CheckPolicies((ability: AppAbility) => ability.can(Action.Read, Article))
+findAll() {
+  return this.articlesService.findAll()
+}
+```
+
+也可以定义一个实现了 `IPolicyHandler` 接口的类：
+
+```ts
+export class ReadArticlePolicyHandler implements IPolicyHandler {
+  handle(ability: AppAbility) {
+    return ability.can(Action.Read, Article)
+  }
+}
+```
+
+然后在路由处理器中使用：
+
+```ts
+@Get()
+@UseGuards(PoliciesGuard)
+@CheckPolicies(new ReadArticlePolicyHandler())
+findAll() {
+  return this.articlesService.findAll()
+}
+```
+
+<CalloutInfo type="warning" title="依赖注入限制">
+由于策略处理器是以 `new` 实例方式传入的，无法使用 Nest 的依赖注入机制。这意味着你无法在策略处理器类中注入服务或依赖。
+
+若需要注入依赖，请改用如下方式：
+
+1. 将 `@CheckPolicies()` 装饰器传入处理器类的类型（`Type<IPolicyHandler>`），而不是其实例。
+2. 在守卫中使用 `ModuleRef` 动态解析处理器实例：
+
+```ts
+const handlerInstance = await this.moduleRef.get(handlerType)
+```
+
+或使用 `moduleRef.create(handlerType)` 创建实例，支持依赖注入。
+
+详细做法请参见：[ModuleRef 文档](/fundamentals/module-ref)。
+
+</CalloutInfo>
+
+如你所见，通过策略守卫与能力工厂的结合，可以灵活地实现细粒度的权限控制，并将授权逻辑以可组合、可复用的方式解耦出来，提升整体代码结构的清晰度。
+
+如需进一步扩展策略守卫支持类级别配置、异步策略检查、组合策略等高级功能，也可以在此基础上演进。

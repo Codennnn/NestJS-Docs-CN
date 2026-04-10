@@ -1,0 +1,32 @@
+import documentationCompodoc1Image from '/public/assets/documentation-compodoc-1.jpg'
+import documentationCompodoc2Image from '/public/assets/documentation-compodoc-2.jpg'
+
+# 文档
+
+**Compodoc** 是一款为 Angular 应用设计的文档生成工具。鉴于 Nest 与 Angular 在项目和代码结构上的高度相似性，**Compodoc** 也完全适用于 Nest 应用。
+
+## 安装
+
+将 Compodoc 集成到你的 Nest 项目中非常简单。首先，运行以下命令来安装开发依赖：
+
+```bash
+npm install -D @compodoc/compodoc
+```
+
+## 生成文档
+
+运行以下命令即可为你的项目生成文档（请注意，你需要 npm 6 或更高版本才能使用 `npx`）。如需了解更多选项，请参阅其[官方文档](https://compodoc.app/guides/usage.html)。
+
+```bash
+npx @compodoc/compodoc -p tsconfig.json -s
+```
+
+完成后，在浏览器中访问 `http://localhost:8080`，你将看到如下所示的项目文档首页：
+
+<DocImage src={documentationCompodoc1Image} alt="Compodoc 1" />
+
+<DocImage src={documentationCompodoc2Image} alt="Compodoc 2" />
+
+## 参与贡献
+
+欢迎在[这里](https://github.com/compodoc/compodoc)为 Compodoc 项目做出贡献。

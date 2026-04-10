@@ -1,0 +1,98 @@
+# 独立应用模式
+
+除了常规的 Web 应用和微服务架构，Nest 还支持创建**独立应用（Standalone Application）** —— 一种不监听任何网络端口的纯逻辑应用形式。它基于 Nest 的 IoC 容器构建，容器内部管理着所有被实例化的类。
+
+独立应用允许你在没有 HTTP 服务的上下文中，依然能够充分使用 Nest 的依赖注入和模块化能力。比如你可以用它来编写定时任务、构建 CLI 工具，或者执行初始化脚本等。
+
+## 快速开始
+
+创建一个独立应用的方式非常简单，只需调用 `createApplicationContext()` 方法：
+
+```ts
+async function bootstrap() {
+  const app = await NestFactory.createApplicationContext(AppModule)
+}
+```
+
+## 获取静态模块中的提供者
+
+独立应用同样支持访问模块中注册的任何提供者。假设 `AppModule` 导入了一个 `TasksModule`，而 `TasksModule` 中声明了一个 `TasksService`：
+
+```ts
+const tasksService = app.get(TasksService)
+```
+
+`get()` 方法可以直接获取任何注册在模块中的提供者实例。它接收一个提供者的令牌（token）作为参数，并从整个模块图中查找对应的实例。
+
+如果你希望更精确地从某个特定模块中获取实例（例如当多个模块中存在同名提供者时），可以搭配 `select()` 方法使用：
+
+```ts
+const tasksService = app.select(TasksModule).get(TasksService, { strict: true })
+```
+
+<CalloutInfo>
+  使用 `strict: true` 时，Nest
+  将只在你指定的模块上下文中查找该实例，不再从全局模块图回退查找。
+</CalloutInfo>
+
+### 常用实例获取方法
+
+| 方法       | 描述                                                                   |
+| ---------- | ---------------------------------------------------------------------- |
+| `get()`    | 从整个应用上下文中获取任何已注册的控制器、提供者、守卫、拦截器等实例。 |
+| `select()` | 在模块图中选择特定模块，通常与 get() 搭配使用以限制查找范围。          |
+
+<CalloutInfo>
+  默认情况下，`app.get()` 会从根模块（root
+  module）开始查找提供者实例；若你希望限定查找范围，应先使用 `app.select()`
+  指定模块。
+</CalloutInfo>
+
+### 注意事项
+
+独立应用不会启动 HTTP 服务，因此它不会处理任何请求。这也意味着，依赖于请求上下文的特性（如中间件、拦截器、请求作用域的守卫和管道等）将不会自动生效。
+
+例如，即使你通过 `app.get()` 获取了某个控制器，并直接调用其方法，也不会触发绑定在该方法上的拦截器逻辑。
+
+## 获取动态模块中的提供者
+
+如果你的项目使用了[动态模块](/fundamentals/dynamic-modules)，在通过 `app.select()` 获取实例时，需要使用模块注册返回的引用对象作为参数。
+
+示例如下：
+
+```ts
+export const dynamicConfigModule = ConfigModule.register({ folder: './config' })
+
+@Module({
+  imports: [dynamicConfigModule],
+})
+export class AppModule {}
+```
+
+接着你可以这样访问动态模块中的服务：
+
+```ts
+const configService = app
+  .select(dynamicConfigModule)
+  .get(ConfigService, { strict: true })
+```
+
+## 关闭应用
+
+在某些使用场景下（如执行 Cron 定时任务），你可能希望在脚本完成后自动退出 Node.js 进程。此时，需要在 `bootstrap` 函数的末尾调用 `app.close()` 方法来优雅地关闭应用上下文：
+
+```ts
+async function bootstrap() {
+  const app = await NestFactory.createApplicationContext(AppModule)
+
+  // 应用逻辑...
+
+  await app.close()
+}
+```
+
+正如[生命周期事件](/fundamentals/lifecycle-events)一章所介绍的，调用 `app.close()` 会触发应用的**关闭生命周期钩子**，用于执行清理逻辑，例如关闭数据库连接、停止任务调度器等。
+
+## 示例项目
+
+你可以参考 Nest 官方提供的[独立应用示例](https://github.com/nestjs/nest/tree/master/sample/18-context)，查看完整的使用代码与最佳实践。

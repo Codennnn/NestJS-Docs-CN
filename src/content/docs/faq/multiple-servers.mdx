@@ -1,0 +1,94 @@
+# HTTPS 和多服务器
+
+如果你希望创建一个支持 HTTPS 的 Nest 应用，只需在 `NestFactory.create()` 的第二个参数中配置 `httpsOptions` 属性：
+
+```ts filename='main.ts'
+const httpsOptions = {
+  key: fs.readFileSync('./secrets/private-key.pem'),
+  cert: fs.readFileSync('./secrets/public-certificate.pem'),
+}
+
+const app = await NestFactory.create(AppModule, {
+  httpsOptions,
+})
+
+await app.listen(process.env.PORT ?? 3000)
+```
+
+在该示例中，`key` 与 `cert` 分别是服务所需的私钥和证书，通常以 PEM 格式存储。
+
+## 使用 Fastify 启动 HTTPS
+
+如果你使用的是 `FastifyAdapter`，则需要通过其构造函数传入 HTTPS 配置项：
+
+```ts
+const app = await NestFactory.create<NestFastifyApplication>(
+  AppModule,
+  new FastifyAdapter({
+    https: httpsOptions,
+  })
+)
+```
+
+注意，Fastify 的 HTTPS 选项格式与原生 Node.js HTTP 模块一致，因此可以复用相同的 `httpsOptions` 对象。
+
+## 同时监听多个端口
+
+在某些场景下，你可能希望让 Nest 应用同时监听多个端口，例如同时支持 HTTP 和 HTTPS 请求。下面的示例演示了如何实现这一目标。
+
+```ts filename='main.ts'
+const httpsOptions = {
+  key: fs.readFileSync('./secrets/private-key.pem'),
+  cert: fs.readFileSync('./secrets/public-certificate.pem'),
+}
+
+const server = express()
+const app = await NestFactory.create(AppModule, new ExpressAdapter(server))
+await app.init()
+
+const httpServer = http.createServer(server).listen(3000)
+const httpsServer = https.createServer(httpsOptions, server).listen(443)
+```
+
+在上述代码中，我们手动创建了 HTTP 和 HTTPS 服务器，并将同一个 Express 实例传递给它们。通过这种方式，Nest 应用可以同时在多个端口上对外提供服务。
+
+不过需要注意的是，由于我们绕过了 Nest 默认的 `listen()` 方法，转而使用 `http.createServer()` 和 `https.createServer()` 来启动服务，因此这些服务器不会被 Nest 的生命周期管理器自动关闭。当调用 `app.close()` 或应用接收到终止信号时，Nest 不会主动关闭这些服务器，必须手动实现关闭逻辑：
+
+```ts filename='shutdown-observer.ts'
+@Injectable()
+export class ShutdownObserver implements OnApplicationShutdown {
+  private httpServers: http.Server[] = []
+
+  addHttpServer(server: http.Server) {
+    this.httpServers.push(server)
+  }
+
+  async onApplicationShutdown() {
+    await Promise.all(
+      this.httpServers.map(
+        (server) =>
+          new Promise((resolve, reject) => {
+            server.close((error) => {
+              error ? reject(error) : resolve(null)
+            })
+          })
+      )
+    )
+  }
+}
+
+const shutdownObserver = app.get(ShutdownObserver)
+shutdownObserver.addHttpServer(httpServer)
+shutdownObserver.addHttpServer(httpsServer)
+```
+
+通过上述方式，你可以确保在应用关闭时，所有手动创建的服务器都能被优雅地释放。
+
+<CalloutInfo>
+  `ExpressAdapter` 需要从 `@nestjs/platform-express` 包中导入。`http` 和 `https`
+  都是 Node.js 的内置模块。
+</CalloutInfo>
+
+<CalloutInfo type="warning">
+  此方法不适用于 [GraphQL 订阅](/graphql/subscriptions)。
+</CalloutInfo>

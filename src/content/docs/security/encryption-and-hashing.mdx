@@ -1,0 +1,78 @@
+# 加密与哈希
+
+**加密**（Encryption）是一种将原始数据（明文）转换为不可直接识别形式（密文）的技术。它的核心目的是防止信息在传输或存储过程中被未授权方理解。虽然加密无法阻止数据被截获，但可以确保只有掌握正确密钥的授权用户才能将密文还原为可读的明文。加密是一个**可逆过程**。
+
+**哈希**（Hashing） 则是一种将任意输入数据通过哈希函数处理，生成固定长度的唯一标识符（哈希值）的过程。哈希是**不可逆的**，也就是说，理论上无法从哈希值反推原始数据。它常用于数据完整性校验、密码存储等场景。
+
+## 加密
+
+Node.js 原生提供了功能强大的 [crypto 模块](https://nodejs.org/api/crypto.html)，可用于对字符串、Buffer、流等多种数据进行加密与解密。Nest 并未对此模块进行额外封装，鼓励开发者直接使用，以避免引入不必要的抽象层。
+
+下面以常见的对称加密算法 AES（高级加密标准）中的 `'aes-256-ctr'` 模式为例，演示如何加密文本内容：
+
+```ts
+import { createCipheriv, randomBytes, scrypt } from 'node:crypto'
+import { promisify } from 'util'
+
+const iv = randomBytes(16) // 初始化向量
+const password = '用于生成密钥的密码'
+
+// 密钥长度取决于所使用的算法，例如 aes-256 需要 32 字节密钥
+const key = (await promisify(scrypt)(password, 'salt', 32)) as Buffer
+const cipher = createCipheriv('aes-256-ctr', key, iv)
+
+const textToEncrypt = 'Nest'
+const encryptedText = Buffer.concat([
+  cipher.update(textToEncrypt),
+  cipher.final(),
+])
+```
+
+接下来，演示如何使用相同的密钥和初始化向量来解密密文：
+
+```ts
+import { createDecipheriv } from 'node:crypto'
+
+const decipher = createDecipheriv('aes-256-ctr', key, iv)
+const decryptedText = Buffer.concat([
+  decipher.update(encryptedText),
+  decipher.final(),
+])
+```
+
+## 哈希
+
+在处理诸如密码存储等安全敏感场景时，推荐使用经过广泛验证的哈希库，如 [bcrypt](https://www.npmjs.com/package/bcrypt) 或 [argon2](https://www.npmjs.com/package/argon2)。Nest 并不对这些库进行封装，开发者可直接调用其原生 API，以保持灵活性和最小化依赖层级。
+
+以下以 `bcrypt` 为例，演示如何生成密码的哈希值：
+
+首先安装依赖：
+
+```bash
+npm install bcrypt
+npm install -D @types/bcrypt
+```
+
+使用 `hash` 函数生成哈希值：
+
+```ts
+import * as bcrypt from 'bcrypt'
+
+const saltOrRounds = 10
+const password = '随机密码'
+const hash = await bcrypt.hash(password, saltOrRounds)
+```
+
+如果你希望手动生成盐（salt），可使用 `genSalt` 方法：
+
+```ts
+const salt = await bcrypt.genSalt()
+```
+
+要验证用户输入的明文密码是否与哈希值匹配，可使用 `compare` 方法：
+
+```ts
+const isMatch = await bcrypt.compare(password, hash)
+```
+
+更多函数与用法，请参阅 [bcrypt 官方文档](https://www.npmjs.com/package/bcrypt)。
