@@ -242,7 +242,7 @@ export const navMainData: NavMenuItem[] = [
   {
     title: 'API 参考',
     titleEn: 'API Reference',
-    url: 'https://api-references-nestjs.netlify.app/',
+    url: 'https://api-references-nestjs.netlify.app/api',
   },
   {
     title: '官方课程',

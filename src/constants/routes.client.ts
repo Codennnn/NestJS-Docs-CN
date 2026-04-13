@@ -63,6 +63,12 @@ export const EXTERNAL_LINKS = {
   OFFICIAL_DOCS: 'https://docs.nestjs.com',
   /** Discord 社区 */
   DISCORD: 'https://discord.gg/G7Qnnhy',
+  /** API 参考文档 */
+  API_REFERENCE: 'https://api-references-nestjs.netlify.app/api',
+  /** Awesome NestJS 资源列表 */
+  AWESOME_NESTJS: 'https://awesome-nestjs.com/',
+  /** 企业咨询服务 */
+  ENTERPRISE: 'https://enterprise.nestjs.com/',
 } as const
 
 /**

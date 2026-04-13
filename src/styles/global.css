@@ -149,6 +149,7 @@
   --spacing-test-page: calc(var(--spacing) * 6);
   --spacing-test-page-x: calc(var(--spacing) * 4);
   --spacing-test-page-y: calc(var(--spacing) * 8);
+  --spacing-landing-section: calc(var(--spacing) * 24);
 }
 
 :root {
@@ -162,7 +163,7 @@
   --card-foreground: oklch(14.5% 0 0deg);
   --popover: oklch(100% 0 0deg);
   --popover-foreground: oklch(14.5% 0 0deg);
-  --primary: oklch(20.5% 0 0deg);
+  --primary: oklch(27.1% 0.105 12.094deg);
   --primary-foreground: oklch(98.5% 0 0deg);
   --secondary: oklch(97% 0 0deg);
   --secondary-foreground: oklch(20.5% 0 0deg);
@@ -220,7 +221,7 @@
     --card-foreground: oklch(98.5% 0 0deg);
     --popover: oklch(20.5% 0 0deg);
     --popover-foreground: oklch(98.5% 0 0deg);
-    --primary: oklch(92.2% 0 0deg);
+    --primary: oklch(94.1% 0.03 12.58deg);
     --primary-foreground: oklch(20.5% 0 0deg);
     --secondary: oklch(26.9% 0 0deg);
     --secondary-foreground: oklch(98.5% 0 0deg);
@@ -352,52 +353,6 @@
       .collapsible-group-open {
         @apply hidden;
       }
-    }
-  }
-}
-
-.ck.ck-editor {
-  /* 尺寸与圆角适配 */
-  --ck-font-size-base: 14px;
-  --ck-border-radius: var(--radius);
-  --ck-spacing-unit: 0.5rem;
-
-  /* 基础前景/背景颜色适配（对接 global.css 语义变量） */
-  --ck-color-base-background: var(--card);
-  --ck-color-base-foreground: var(--foreground);
-
-  /* Toolbar、面板与边框 */
-  --ck-color-toolbar-border: var(--border);
-  --ck-color-dropdown-panel-background: var(--popover);
-  --ck-color-dropdown-panel-border: var(--border);
-
-  /* 输入框与按钮 */
-  --ck-color-input-background: var(--secondary);
-  --ck-color-input-border: var(--border);
-  --ck-color-button-default-background: transparent;
-  --ck-color-button-default-hover-background: var(--secondary);
-  --ck-color-button-on-background: var(--secondary);
-  --ck-color-button-on-hover-background: var(--secondary);
-
-  .ck-content {
-    font-family: var(--font-sans);
-    color: var(--foreground);
-
-    code,
-    pre code {
-      font-family: var(--font-mono);
-    }
-
-    ::selection {
-      color: var(--primary-foreground);
-      background: var(--primary);
-    }
-  }
-
-  .ck-placeholder {
-    &::before {
-      font-size: 14px;
-      color: var(--color-muted-foreground);
     }
   }
 }
