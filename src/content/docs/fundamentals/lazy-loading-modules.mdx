@@ -5,9 +5,11 @@
 通过启用**懒加载**（lazy loading），Nest 会仅在收到请求且真正需要某个模块时才进行加载，从而有效缩短启动时间。此外，你还可以在函数预热阶段异步加载部分模块（即**延迟注册**），以优化后续请求的响应速度。
 
 <CalloutInfo>
-  如果你使用过 [Angular](https://angular.dev/) 框架，可能对「[懒加载模块](https://angular.dev/guide/ngmodules/lazy-loading#lazy-loading-basics)」这一概念比较熟悉。但需要特别注意：**Nest 的懒加载机制与 Angular 完全不同**，两者虽然名字相似，但底层原理和实现方式并不相同。
+  如果你使用过 [Angular](https://angular.dev/)
+  框架，可能对「[懒加载模块](https://angular.dev/guide/ngmodules/lazy-loading#lazy-loading-basics)」这一概念比较熟悉。但需要特别注意：**Nest
+  的懒加载机制与 Angular
+  完全不同**，两者虽然名字相似，但底层原理和实现方式并不相同。
 </CalloutInfo>
-
 
 <CalloutInfo type="warning">
   启用懒加载后，[生命周期钩子方法](/fundamentals/lifecycle-events)将**不会被触发**。

@@ -1,10 +1,3 @@
-import graphPublishedTerminalImage from '/public/assets/devtools/graph-published-terminal.png'
-import projectImage from '/public/assets/devtools/project.png'
-import reportImage from '/public/assets/devtools/report.png'
-import nodesSelectionImage from '/public/assets/devtools/nodes-selection.png'
-import integrateGithubAppImage from '/public/assets/devtools/integrate-github-app.png'
-import actionsPreviewImage from '/public/assets/devtools/actions-preview.png'
-
 # CI/CD 集成
 
 <CalloutInfo>
@@ -64,11 +57,14 @@ async function bootstrap() {
 
 当依赖关系图成功发布后，终端将输出类似如下信息：
 
-<DocImage src={graphPublishedTerminalImage} alt="Graph published terminal" />
+<DocImage
+  src="/assets/devtools/graph-published-terminal.png"
+  alt="Graph published terminal"
+/>
 
 此外，你还可以在 Devtools 项目页面中查看该次发布记录：
 
-<DocImage src={projectImage} alt="Project" />
+<DocImage src="/assets/devtools/project.png" alt="Project" />
 
 ## 报告
 
@@ -76,7 +72,7 @@ async function bootstrap() {
 
 你可以在项目对应的页面（通常位于所属组织下）查看这些报告。
 
-<DocImage src={reportImage} alt="Report" />
+<DocImage src="/assets/devtools/report.png" alt="Report" />
 
 报告可以帮助你发现常被代码评审忽略的变更。例如，有人修改了一个**深层嵌套提供者**的作用域（Scope）——这种变动往往不易察觉，但通过 Devtools 的报告，你能快速发现并确认该变更是否为有意操作。又如，如果某个端点的守卫（Guard）被移除，该项也会在报告中高亮标注为「受影响项」。若该路由缺乏集成测试或端到端测试，可能直到正式上线后才会暴露出安全问题。
 
@@ -90,7 +86,7 @@ async function bootstrap() {
 - 灰色节点：已更新项
 - 红色节点：已删除项
 
-<DocImage src={nodesSelectionImage} alt="Nodes selection" />
+<DocImage src="/assets/devtools/nodes-selection.png" alt="Nodes selection" />
 
 借助这项「时光回溯」功能，你可以通过对比当前版本与历史版本的依赖关系图，快速定位潜在问题。根据配置，Devtools 可在每一次拉取请求，甚至每一次提交后自动生成依赖快照，方便你随时回溯、查看改动细节。
 
@@ -175,11 +171,14 @@ const publishOptions = {
 
 <CalloutInfo>此步骤为可选，但推荐开启。</CalloutInfo>
 
-<DocImage src={integrateGithubAppImage} alt="Integrate GitHub app" />
+<DocImage
+  src="/assets/devtools/integrate-github-app.png"
+  alt="Integrate GitHub app"
+/>
 
 启用后，你将在每个拉取请求页面中，直接查看生成的预览与报告状态：
 
-<DocImage src={actionsPreviewImage} alt="Actions preview" />
+<DocImage src="/assets/devtools/actions-preview.png" alt="Actions preview" />
 
 ## 集成：GitLab Pipelines
 

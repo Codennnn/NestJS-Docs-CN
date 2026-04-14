@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 8080 --webpack",
-    "build": "next build --webpack",
+    "dev": "next dev -p 8080",
+    "build": "next build",
     "clean": "rimraf node_modules .next",
     "start": "next start -p 8080",
     "deps": "pnpm up --interactive --latest",

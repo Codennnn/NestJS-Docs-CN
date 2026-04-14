@@ -1,9 +1,5 @@
 import type { NextConfig } from 'next'
 import createMDX from '@next/mdx'
-// import rehypeShiki from '@shikijs/rehype'
-import rehypeMdxCodeProps from 'rehype-mdx-code-props'
-import rehypeSlug from 'rehype-slug'
-import remarkGfm from 'remark-gfm'
 
 const nextConfig: NextConfig = {
   // 添加这个配置以支持 Docker standalone 输出
@@ -139,23 +135,12 @@ const nextConfig: NextConfig = {
   // },
 }
 
+// Turbopack 无法将 JavaScript 函数传递给 Rust 编译器，
+// 因此 remark/rehype 插件必须使用字符串名称而非导入的对象实例
 const withMDX = createMDX({
   options: {
-    remarkPlugins: [remarkGfm],
-    rehypePlugins: [
-      rehypeMdxCodeProps,
-      rehypeSlug,
-      // [
-      //   rehypeShiki,
-      //   {
-      //     themes: {
-      //       light: 'github-light',
-      //       dark: 'github-dark',
-      //     },
-      //     inline: 'tailing-curly-colon',
-      //   },
-      // ],
-    ],
+    remarkPlugins: ['remark-gfm'],
+    rehypePlugins: ['rehype-mdx-code-props', 'rehype-slug'],
   },
 })
 

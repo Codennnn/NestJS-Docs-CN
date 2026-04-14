@@ -1,6 +1,3 @@
-import terminusErrorLogPrettyImage from '/public/assets/Terminus_Error_Log_Pretty.png'
-import terminusErrorLogJsonImage from '/public/assets/Terminus_Error_Log_Json.png'
-
 # 健康检查（Health Check）
 
 什么是健康检查？简单来说，就是让你的应用能够「主动汇报自己的状态」。
@@ -540,10 +537,10 @@ export class HealthModule {}
 
 Terminus 支持配置健康检查错误在日志中的展示方式：
 
-| 样式           | 特点                                     | 示例图                                                                         |
-| :------------- | :--------------------------------------- | :----------------------------------------------------------------------------- |
-| `json`（默认） | 结构化 JSON 格式，便于日志收集工具解析   | <DocImage src={terminusErrorLogJsonImage} alt="Terminus Error Log Json" />     |
-| `pretty`       | 美化的可读格式，带颜色高亮，便于开发调试 | <DocImage src={terminusErrorLogPrettyImage} alt="Terminus Error Log Pretty" /> |
+| 样式           | 特点                                     | 示例图                                                                                   |
+| :------------- | :--------------------------------------- | :--------------------------------------------------------------------------------------- |
+| `json`（默认） | 结构化 JSON 格式，便于日志收集工具解析   | <DocImage src="/assets/Terminus_Error_Log_Json.png" alt="Terminus Error Log Json" />     |
+| `pretty`       | 美化的可读格式，带颜色高亮，便于开发调试 | <DocImage src="/assets/Terminus_Error_Log_Pretty.png" alt="Terminus Error Log Pretty" /> |
 
 你可以通过如下配置项 `errorLogStyle` 来切换日志样式：
 

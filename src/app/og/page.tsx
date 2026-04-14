@@ -1,7 +1,5 @@
 import Image from 'next/image'
 
-import logo from '/public/logos/logo-128.png'
-
 /**
  * Open Graph 静态页面
  * 专门用于生成 Open Graph 图片的静态布局页面
@@ -9,7 +7,7 @@ import logo from '/public/logos/logo-128.png'
 export default function OpenGraphPage() {
   return (
     <div
-      className="relative w-[1200px] h-[630px] overflow-hidden bg-background text-foreground-accent"
+      className="relative w-300 h-157.5 overflow-hidden bg-background text-foreground-accent"
       style={{
         transform: 'scale(1)',
       }}
@@ -25,7 +23,7 @@ export default function OpenGraphPage() {
                 alt="NestJS Logo"
                 className="rounded-2xl"
                 height={96}
-                src={logo}
+                src="/logos/logo-128.png"
                 width={96}
               />
             </div>

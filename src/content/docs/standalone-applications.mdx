@@ -61,7 +61,9 @@ const tasksService = app.select(TasksModule).get(TasksService, { strict: true })
 示例如下：
 
 ```ts
-export const dynamicConfigModule = ConfigModule.register({ folder: './config' })
+export const dynamicConfigModule = ConfigModule.register({
+  folder: './config',
+})
 
 @Module({
   imports: [dynamicConfigModule],

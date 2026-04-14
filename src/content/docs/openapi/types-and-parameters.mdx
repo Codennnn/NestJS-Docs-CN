@@ -1,8 +1,3 @@
-import swaggerDtoImage from '/public/assets/swagger-dto.png'
-import swaggerDto2Image from '/public/assets/swagger-dto2.png'
-import enumQueryImage from '/public/assets/enum_query.gif'
-import enumQueryArrayImage from '/public/assets/enum_query_array.gif'
-
 # 类型与参数
 
 `SwaggerModule` 会扫描路由处理器中的 `@Body()`、`@Query()` 和 `@Param()` 装饰器来生成 API 文档。同时，它利用反射机制自动创建对应的模型定义。例如：
@@ -21,7 +16,7 @@ async create(@Body() createCatDto: CreateCatDto) {
 
 Swagger UI 将根据 `CreateCatDto` 生成以下模型定义：
 
-<DocImage src={swaggerDtoImage} alt="Swagger DTO" />
+<DocImage src="/assets/swagger-dto.png" alt="Swagger DTO" />
 
 如上图所示，尽管 `CreateCatDto` 类中已经声明了多个属性，但生成的模型定义仍然是空的。
 
@@ -50,7 +45,7 @@ export class CreateCatDto {
 
 更新代码后，你可以在浏览器中看到 `CreateCatDto` 的模型定义已经包含了所有属性：
 
-<DocImage src={swaggerDto2Image} alt="Swagger DTO" />
+<DocImage src="/assets/swagger-dto2.png" alt="Swagger DTO" />
 
 此外，`@ApiProperty()` 装饰器还允许你配置多种 [Schema Object](https://swagger.io/specification/#schemaObject) 属性，例如：
 
@@ -145,12 +140,16 @@ export enum UserRole {
 async filterByRole(@Query('role') role: UserRole = UserRole.User) {}
 ```
 
-<DocImage src={enumQueryImage} alt="Enum Query" placeholder={undefined} />
+<DocImage
+  src="/assets/enum_query.gif"
+  alt="Enum Query"
+  placeholder={undefined}
+/>
 
 如果将 `isArray` 设置为 **true**，枚举就可以作为多选列表呈现：
 
 <DocImage
-  src={enumQueryArrayImage}
+  src="/assets/enum_query_array.gif"
   alt="Enum Query Array"
   placeholder={undefined}
 />

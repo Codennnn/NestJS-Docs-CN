@@ -473,9 +473,7 @@ this.eventBus.publish(new HeroKilledDragonEvent(heroId, dragonId))
 
 ```ts filename='hero-killed-dragon.handler.ts'
 @EventsHandler(HeroKilledDragonEvent)
-export class HeroKilledDragonHandler
-  implements IEventHandler<HeroKilledDragonEvent>
-{
+export class HeroKilledDragonHandler implements IEventHandler<HeroKilledDragonEvent> {
   constructor(
     private repository: HeroesRepository,
     private notificationService: NotificationService
@@ -513,7 +511,7 @@ providers: [HeroKilledDragonHandler]
 
 <CalloutInfo>
   <div>使用事件处理器时需要注意以下几点：</div>
-  <ul className="!m-0">
+  <ul className="m-0!">
     <li>
       <strong>异常处理</strong>
       ：事件处理器中的错误不会自动被捕获，需要手动处理（try/catch）。

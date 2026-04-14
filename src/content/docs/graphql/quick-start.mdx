@@ -1,5 +1,3 @@
-import playgroundImage from '/public/assets/playground.png'
-
 # 探索 TypeScript 与 GraphQL 的强大结合
 
 [GraphQL](https://graphql.org/) 是一种功能强大的 API 查询语言，同时也是一个用于根据现有数据满足这些查询的运行时。它以优雅的方式解决了 REST 接口（RESTful API）中常见的诸多问题。作为补充，建议阅读这篇 [GraphQL 与 REST 的对比](https://www.apollographql.com/blog/graphql-vs-rest)，以便更好地理解二者的区别。将 GraphQL 与 [TypeScript](https://www.typescriptlang.org/) 结合使用，可以让你的 GraphQL 查询具备端到端的类型安全。
@@ -95,7 +93,7 @@ Playground 是一个图形化、交互式的浏览器内 GraphQL IDE，默认情
 
 完成上述准备，并确保应用在后台运行后，你只需在浏览器中访问 `http://localhost:3000/graphql`（主机和端口可能因你的配置而异），即可看到 GraphQL Playground，效果如下图所示。
 
-<DocImage src={playgroundImage} alt="GraphQL Playground" />
+<DocImage src="/assets/playground.png" alt="GraphQL Playground" />
 
 <CalloutInfo>
   `@nestjs/mercurius` 集成并未内置 GraphQL Playground。你可以使用
