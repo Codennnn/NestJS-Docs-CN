@@ -35,8 +35,8 @@ const DRY_RUN = process.env.DRY_RUN === 'true'
 const EXCLUDED_DOC_PATHS = new Set(['test'])
 const MAX_BATCH_DOCS = 100
 const MAX_BATCH_BYTES = 750_000
-const RETRY_ATTEMPTS = 3
-const RETRY_BASE_DELAY_MS = 1000
+const RETRY_ATTEMPTS = 5
+const RETRY_BASE_DELAY_MS = 2000
 
 /**
  * 递归收集所有 MDX 文件路径
@@ -238,7 +238,10 @@ async function main() {
 
   const orama = new OramaCloud({ projectId, apiKey })
   const datasource = orama.dataSource(datasourceId)
-  const temporaryDatasource = await datasource.createTemporaryIndex()
+  const temporaryDatasource = await withRetry(
+    async () => datasource.createTemporaryIndex(),
+    '创建临时索引',
+  )
   const batchedDocuments = batchDocuments(toOramaDocuments(allChunks))
 
   console.log(`   📦 已生成 ${batchedDocuments.length} 个上传批次`)
@@ -256,7 +259,10 @@ async function main() {
   }
 
   console.log('🔄 切换临时索引...')
-  await temporaryDatasource.swap()
+  await withRetry(
+    async () => temporaryDatasource.swap(),
+    '切换临时索引',
+  )
 
   console.log(`\n✅ 同步完成！共推送 ${allChunks.length} 个文档分段`)
 }
