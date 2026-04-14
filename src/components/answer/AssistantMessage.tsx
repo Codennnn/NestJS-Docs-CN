@@ -71,24 +71,34 @@ function RelatedQuestions(props: RelatedQuestionsProps) {
 
       <div className="space-y-0.5">
         {questions.map((query: string, queryIdx: number) => (
-          <button
+          <div
             key={queryIdx}
-            className="flex items-center justify-start gap-1 text-[0.8em] text-blue-500 hover:underline underline-offset-2 group/question"
+            className="flex items-center justify-start gap-1 text-[0.8em] text-blue-500 hover:underline underline-offset-2 group/question cursor-pointer"
+            role="button"
+            tabIndex={0}
             onClick={() => {
               onQuestionClick(query)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onQuestionClick(query)
+              }
             }}
           >
             {query}
 
             <Tooltip>
-              <TooltipTrigger>
-                <MessageSquarePlusIcon className="size-[1em] opacity-0 group-hover/question:opacity-100 transition-opacity" />
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <MessageSquarePlusIcon className="size-[1em] opacity-0 group-hover/question:opacity-100 transition-opacity" />
+                </span>
               </TooltipTrigger>
               <TooltipContent>
                 添加到提问
               </TooltipContent>
             </Tooltip>
-          </button>
+          </div>
         ))}
       </div>
     </div>

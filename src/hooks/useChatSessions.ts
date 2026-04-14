@@ -217,6 +217,7 @@ export function useChatSessions() {
       else {
         activeSessions++
       }
+
       totalMessages += session.messages.length
     }
 

@@ -16,7 +16,7 @@ import { useMDXComponents } from '~/mdx-components'
 import { ClientCodeBlock } from './ClientCodeBlock'
 
 interface PreProps {
-  children: React.ReactElement<{ className: string, children: React.ReactElement | string }>
+  children: React.ReactElement<{ className?: string, children: React.ReactElement | string }>
   filename?: string
   showLineNumbers?: boolean
   hideInDoc?: boolean
@@ -73,7 +73,8 @@ export function MDXRenderer(props: MDXRendererProps) {
         }
 
         const { className, children: codeContent } = children.props
-        const lang = (className.replace(/language-/, '') || 'text')
+        // 当代码块没有语言标识时，className 为 undefined，用可选链防止 replace 报错
+        const lang = (className?.replace(/language-/, '') || 'text')
 
         if (typeof codeContent === 'string') {
           if (lang === 'mermaid') {

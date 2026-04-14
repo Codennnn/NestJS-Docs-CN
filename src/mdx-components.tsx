@@ -24,7 +24,7 @@ import { cn } from '~/lib/utils'
 import { getDocLinkHref, isExternalLink, isHashLink } from '~/utils/link'
 
 interface PreProps {
-  children: React.ReactElement<{ className: string, children: React.ReactElement | string }>
+  children: React.ReactElement<{ className?: string, children: React.ReactElement | string }>
   filename?: string
   title?: string
   showLineNumbers?: boolean
@@ -135,7 +135,8 @@ export function useMDXComponents(components: MDXComponents): MDXComponents {
 
         const { className, children: codeContent } = children.props
 
-        const lang = (className.replace(/language-/, '') || 'text') as BundledLanguage
+        // 当代码块没有语言标识时，className 为 undefined，用可选链防止 replace 报错
+        const lang = (className?.replace(/language-/, '') || 'text') as BundledLanguage
 
         if (typeof codeContent === 'string') {
           if (lang === 'mermaid') {

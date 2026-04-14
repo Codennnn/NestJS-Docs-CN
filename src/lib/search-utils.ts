@@ -121,4 +121,3 @@ export function calculateRelevanceScore(result: SearchResult, searchTerm: string
 
   return Math.min(score, 1.0)
 }
-

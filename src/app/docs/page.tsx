@@ -14,7 +14,6 @@ export default function DocsIndexPage() {
     // 检查项目是否有有效的 URL
     if (item.url && !isHashLink(item.url)) {
       firstValidUrl = item.url
-      found = true
       break
     }
 
