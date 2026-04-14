@@ -1,6 +1,6 @@
 'use client'
 
-import { OramaCloud } from '@oramacloud/react-client'
+import { useCallback } from 'react'
 
 import {
   Dialog,
@@ -15,6 +15,10 @@ interface SearchDialogProps {
 }
 
 export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
+  const handleClose = useCallback(() => {
+    onOpenChange(false)
+  }, [onOpenChange])
+
   return (
     <Dialog
       open={open}
@@ -24,12 +28,7 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
         className="max-w-3xl h-[clamp(200px,50vh,650px)] p-0 gap-0 overflow-hidden outline-background/60 outline-4"
         showCloseButton={false}
       >
-        <OramaCloud
-          apiKey={process.env.NEXT_PUBLIC_ORAMA_API_KEY!}
-          endpoint={process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!}
-        >
-          <SearchDialogContent onClose={() => { onOpenChange(false) }} />
-        </OramaCloud>
+        <SearchDialogContent onClose={handleClose} />
       </DialogContent>
     </Dialog>
   )

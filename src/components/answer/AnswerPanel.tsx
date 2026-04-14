@@ -59,31 +59,25 @@ export function AnswerPanel(props: AnswerPanelProps) {
 
   // 当会话切换时恢复对话历史
   useEffect(() => {
-    if (currentSessionId) {
-      const restoredMessages = restoreSessionMessages(currentSessionId)
-      // 设置初始消息并重新初始化 Orama 会话
-      setInitialMessages(restoredMessages)
-    }
+    const restoredMessages = currentSessionId
+      ? restoreSessionMessages(currentSessionId)
+      : []
+
+    // 设置初始消息并重新初始化 Orama 会话
+    setInitialMessages(restoredMessages)
   }, [currentSessionId, restoreSessionMessages, setInitialMessages])
 
-  // 自动滚动到底部
+  // 自动滚动到底部：消息变化或加载开始时触发
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 || isLoading) {
       smartScrollToBottom()
     }
-  }, [messages, smartScrollToBottom])
+  }, [messages, isLoading, smartScrollToBottom])
 
   // 保存新消息到当前会话
   useEffect(() => {
     saveMessages(messages)
   }, [messages, saveMessages])
-
-  // 当加载状态变化时也滚动到底部，确保用户能看到加载状态
-  useEffect(() => {
-    if (isLoading) {
-      smartScrollToBottom()
-    }
-  }, [isLoading, smartScrollToBottom])
 
   useEffect(() => {
     onLoadingChange?.(isLoading)
@@ -93,8 +87,8 @@ export function AnswerPanel(props: AnswerPanelProps) {
     onAbortRefReady?.(abortAnswer)
   }, [abortAnswer, onAbortRefReady])
 
-  const handleAskQuestion = useEvent(() => {
-    const trimmedQuestion = currentQuestion.trim()
+  const submitQuestion = useEvent((question: string) => {
+    const trimmedQuestion = question.trim()
 
     if (trimmedQuestion.length === 0 || isLoading) {
       return
@@ -111,16 +105,12 @@ export function AnswerPanel(props: AnswerPanelProps) {
     void askQuestion(trimmedQuestion)
   })
 
+  const handleAskQuestion = useEvent(() => {
+    submitQuestion(currentQuestion)
+  })
+
   const handleRelatedQuestionClick = useEvent((query: string) => {
-    setCurrentQuestion(query)
-
-    // 设置问题后立即滚动，让用户看到问题被填入
-    resetScrollState()
-
-    // 等待状态更新后再发送问题
-    setTimeout(() => {
-      handleAskQuestion()
-    }, 0)
+    submitQuestion(query)
   })
 
   const handleStopGeneration = useEvent(() => {

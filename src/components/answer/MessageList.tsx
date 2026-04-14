@@ -1,6 +1,8 @@
 'use client'
 
-import type { Interaction } from '@oramacloud/client'
+import { memo, useMemo } from 'react'
+
+import type { Interaction } from '@orama/core'
 
 import { ScrollGradientContainer } from '~/components/ScrollGradientContainer'
 import type { ChatMessage } from '~/types/chat'
@@ -53,7 +55,7 @@ interface MessageListProps {
  *
  * @param props 组件属性
  */
-export function MessageList(props: MessageListProps) {
+export const MessageList = memo(function MessageList(props: MessageListProps) {
   const {
     messages,
     interactions,
@@ -63,6 +65,10 @@ export function MessageList(props: MessageListProps) {
     onScroll,
     onRelatedQuestionClick,
   } = props
+
+  const interactionsById = useMemo(() => {
+    return new Map(interactions.map((interaction) => [interaction.id, interaction]))
+  }, [interactions])
 
   return (
     <ScrollGradientContainer
@@ -88,7 +94,9 @@ export function MessageList(props: MessageListProps) {
                 }
 
                 // 助手消息
-                const currentInteraction = interactions[Math.floor(idx / 2)]
+                const currentInteraction = message.interactionId
+                  ? interactionsById.get(message.interactionId)
+                  : undefined
 
                 return (
                   <AssistantMessage
@@ -109,4 +117,4 @@ export function MessageList(props: MessageListProps) {
           )}
     </ScrollGradientContainer>
   )
-}
+})

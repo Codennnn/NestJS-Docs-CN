@@ -20,12 +20,9 @@ importers:
       '@next/mdx':
         specifier: 16.2.3
         version: 16.2.3(@mdx-js/loader@3.1.1)(@mdx-js/react@3.1.1(@types/react@19.2.7)(react@19.2.5))
-      '@oramacloud/client':
-        specifier: ^2.1.4
-        version: 2.1.4
-      '@oramacloud/react-client':
-        specifier: ^2.1.4
-        version: 2.1.4
+      '@orama/core':
+        specifier: ^1.2.19
+        version: 1.2.19
       '@radix-ui/react-accordion':
         specifier: ^1.2.11
         version: 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -869,18 +866,14 @@ packages:
     resolution: {integrity: sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA==}
     engines: {node: '>=12.4.0'}
 
+  '@orama/core@1.2.19':
+    resolution: {integrity: sha512-AVEI0eG/a1RUQK+tBloRMppQf46Ky4kIYKEVjo0V0VfIGZHdLOE2PJR4v949kFwiTnfSJCUaxgwM74FCA1uHUA==}
+
   '@orama/cuid2@2.2.3':
     resolution: {integrity: sha512-Lcak3chblMejdlSHgYU2lS2cdOhDpU6vkfIJH4m+YKvqQyLqs1bB8+w6NT1MG5bO12NUK2GFc34Mn2xshMIQ1g==}
 
-  '@orama/orama@3.1.18':
-    resolution: {integrity: sha512-a61ljmRVVyG5MC/698C8/FfFDw5a8LOIvyOLW5fztgUXqUpc1jOfQzOitSCbge657OgXXThmY3Tk8fpiDb4UcA==}
-    engines: {node: '>= 20.0.0'}
-
-  '@oramacloud/client@2.1.4':
-    resolution: {integrity: sha512-uNPFs4wq/iOPbggCwTkVNbIr64Vfd7ZS/h+cricXVnzXWocjDTfJ3wLL4lr0qiSu41g8z+eCAGBqJ30RO2O4AA==}
-
-  '@oramacloud/react-client@2.1.4':
-    resolution: {integrity: sha512-9Cm9R9lexXAY4sE0fe8Ishoc1O4yaK1N58zVnzsuh9g+bebt4XLwIsJbzEcbsXBKLKHH3tRKUEZpO6Cjm1IoSg==}
+  '@orama/oramacore-events-parser@0.0.5':
+    resolution: {integrity: sha512-yAuSwog+HQBAXgZ60TNKEwu04y81/09mpbYBCmz1RCxnr4ObNY2JnPZI7HmALbjAhLJ8t5p+wc2JHRK93ubO4w==}
 
   '@package-json/types@0.0.12':
     resolution: {integrity: sha512-uu43FGU34B5VM9mCNjXCwLaGHYjXdNincqKLaraaCW+7S2+SmiBg1Nv8bPnmschrIfZmfKNY9f3fC376MRrObw==}
@@ -3342,9 +3335,6 @@ packages:
   lodash.truncate@4.4.2:
     resolution: {integrity: sha512-jttmRe7bRse52OsWIMDLaXxWqRAmtIUccAQ3garviCqJjafXOfNMO0yMfNpdD6zbGaTU0P5Nz7e7gAT6cKmJRw==}
 
-  lodash@4.18.1:
-    resolution: {integrity: sha512-dMInicTPVE8d1e5otfwmmjlxkZoUpiVLwyeTdUsi/Caj/gfzzblBcCE5sRHV/AsjuCmxWrte2TNGSYuCeCq+0Q==}
-
   longest-streak@3.1.0:
     resolution: {integrity: sha512-9Ri+o0JYgehTaVBBDoMqIl8GXtbWg711O3srftcHhZ0dqnETqLaoIK0x17fUw9rFSlK/0NlsKe0Ahhyl5pXE2g==}
 
@@ -3938,10 +3928,6 @@ packages:
     resolution: {integrity: sha512-wNchkFrrlz64QQOJOf5+dFjy+27bJEwtS1SgliRXVsU60wo3pSntNRlwDws2qPHwrAP/wlm5IyQHBlPCya0JIQ==}
     peerDependencies:
       react: '>=16.8.0'
-
-  react@18.3.1:
-    resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
-    engines: {node: '>=0.10.0'}
 
   react@19.2.5:
     resolution: {integrity: sha512-llUJLzz1zTUBrskt2pwZgLq59AemifIftw4aB7JxOqf1HY2FDaGDxgwpAPVzHU1kdWabH7FauP4i1oEeer2WCA==}
@@ -5200,24 +5186,16 @@ snapshots:
 
   '@nolyfill/is-core-module@1.0.39': {}
 
+  '@orama/core@1.2.19':
+    dependencies:
+      '@orama/cuid2': 2.2.3
+      '@orama/oramacore-events-parser': 0.0.5
+
   '@orama/cuid2@2.2.3':
     dependencies:
       '@noble/hashes': 1.8.0
 
-  '@orama/orama@3.1.18': {}
-
-  '@oramacloud/client@2.1.4':
-    dependencies:
-      '@orama/cuid2': 2.2.3
-      '@orama/orama': 3.1.18
-      lodash: 4.18.1
-
-  '@oramacloud/react-client@2.1.4':
-    dependencies:
-      '@orama/orama': 3.1.18
-      '@oramacloud/client': 2.1.4
-      lodash: 4.18.1
-      react: 18.3.1
+  '@orama/oramacore-events-parser@0.0.5': {}
 
   '@package-json/types@0.0.12': {}
 
@@ -7999,8 +7977,6 @@ snapshots:
 
   lodash.truncate@4.4.2: {}
 
-  lodash@4.18.1: {}
-
   longest-streak@3.1.0: {}
 
   loose-envify@1.4.0:
@@ -8913,10 +8889,6 @@ snapshots:
   react-use-event-hook@0.9.6(react@19.2.5):
     dependencies:
       react: 19.2.5
-
-  react@18.3.1:
-    dependencies:
-      loose-envify: 1.4.0
 
   react@19.2.5: {}
 

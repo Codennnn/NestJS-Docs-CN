@@ -1,0 +1,57 @@
+name: Sync Orama Index
+
+on:
+  pull_request:
+    paths:
+      - 'src/content/docs/**/*.mdx'
+      - 'src/lib/data/nav.ts'
+      - 'scripts/sync-orama.ts'
+      - 'scripts/lib/**'
+
+  push:
+    branches: [main]
+    paths:
+      - 'src/content/docs/**/*.mdx'
+      - 'src/lib/data/nav.ts'
+      - 'scripts/sync-orama.ts'
+      - 'scripts/lib/**'
+
+  # 支持手动触发（用于首次全量同步或故障恢复）
+  workflow_dispatch:
+
+concurrency:
+  group: sync-orama-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Validate and sync documents to Orama Cloud
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Orama sync payload
+        run: pnpm orama:dry-run
+
+      - name: Sync to Orama Cloud
+        if: github.event_name != 'pull_request'
+        run: pnpm tsx scripts/sync-orama.ts
+        env:
+          ORAMA_PROJECT_ID: ${{ secrets.ORAMA_PROJECT_ID }}
+          ORAMA_PRIVATE_API_KEY: ${{ secrets.ORAMA_PRIVATE_API_KEY }}
+          ORAMA_DATASOURCE_ID: ${{ secrets.ORAMA_DATASOURCE_ID }}

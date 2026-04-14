@@ -1,15 +1,12 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
-import { useEvent } from 'react-use-event-hook'
+import { useEffect, useMemo } from 'react'
 
-import { useSearch } from '@oramacloud/react-client'
-import { FileTextIcon, SearchIcon } from 'lucide-react'
+import { AlertCircleIcon, FileTextIcon, SearchIcon } from 'lucide-react'
 
 import { Skeleton } from '~/components/ui/skeleton'
+import { useOramaSearch } from '~/hooks/useOramaSearch'
 import {
   calculateRelevanceScore,
-  generateCacheKey,
   highlightSearchTerm,
-  SearchCache,
 } from '~/lib/search-utils'
 import type { SearchResult } from '~/types/doc'
 
@@ -25,9 +22,6 @@ interface SearchResultsProps {
   onSelectedIndexChange: (index: number) => void
 }
 
-// 创建全局搜索缓存实例
-const searchCache = new SearchCache(50)
-
 export function SearchResults(props: SearchResultsProps) {
   const {
     searchTerm,
@@ -38,53 +32,14 @@ export function SearchResults(props: SearchResultsProps) {
     onSelectedIndexChange,
   } = props
 
-  // 使用 useDeferredValue 优化搜索体验，避免频繁请求
-  const deferredSearchTerm = useDeferredValue(searchTerm)
-
   // 在组合输入状态下不触发搜索，避免内容抖动
-  const effectiveSearchTerm = isComposing ? '' : deferredSearchTerm
+  const effectiveSearchTerm = isComposing ? '' : searchTerm
 
-  const [loading, setLoading] = useState(false)
-  const [cachedResults, setCachedResults] = useState<SearchResult[]>([])
-
-  // 优化后的搜索配置
-  const { results } = useSearch({
+  // 使用自定义搜索 Hook
+  const { results, loading, error } = useOramaSearch({
     term: effectiveSearchTerm,
-    limit: 20, // 增加结果数量
+    limit: 20,
   })
-
-  // 处理搜索加载状态和缓存
-  useEffect(() => {
-    if (effectiveSearchTerm.trim()) {
-      const cacheKey = generateCacheKey(effectiveSearchTerm)
-
-      // 检查缓存
-      if (searchCache.has(cacheKey)) {
-        const cached = searchCache.get(cacheKey)!
-        setCachedResults(cached.results)
-        onResultsChange(cached.results)
-        setLoading(false)
-
-        return
-      }
-
-      setLoading(true)
-      setCachedResults([])
-
-      const timer = setTimeout(() => {
-        setLoading(false)
-      }, 300)
-
-      return () => {
-        clearTimeout(timer)
-      }
-    }
-    else {
-      setLoading(false)
-      setCachedResults([])
-      onResultsChange([])
-    }
-  }, [effectiveSearchTerm, onResultsChange])
 
   // 处理搜索结果
   const hits = useMemo<SearchResult[]>(() => {
@@ -92,48 +47,41 @@ export function SearchResults(props: SearchResultsProps) {
       return []
     }
 
-    const cacheKey = generateCacheKey(effectiveSearchTerm)
+    return (results?.hits ?? [])
+      .map((hit) => {
+        const enhancedHit = {
+          ...hit,
+          score: hit.score || calculateRelevanceScore(hit, effectiveSearchTerm),
+        } as SearchResult
 
-    // 如果有缓存，使用缓存
-    if (cachedResults.length > 0) {
-      return cachedResults
-    }
-
-    // 处理新的搜索结果
-    const processedResults = (results?.hits ?? []).map((hit) => {
-      const enhancedHit = {
-        ...hit,
-        score: hit.score || calculateRelevanceScore(hit, effectiveSearchTerm),
-      } as SearchResult
-
-      return enhancedHit
-    })
-
-    // 按相关性得分排序
-    processedResults.sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-
-    // 缓存结果
-    if (processedResults.length > 0) {
-      searchCache.set(cacheKey, {
-        results: processedResults,
-        // eslint-disable-next-line react-hooks/purity
-        timestamp: Date.now(),
-        query: effectiveSearchTerm,
+        return enhancedHit
       })
+      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
+  }, [results, effectiveSearchTerm])
+
+  useEffect(() => {
+    if (!effectiveSearchTerm.trim()) {
+      onResultsChange([])
+
+      return
     }
 
-    return processedResults
-  }, [results, effectiveSearchTerm, cachedResults])
+    if (error) {
+      onResultsChange([])
 
-  // 更新父组件的结果
-  useEffect(() => {
+      return
+    }
+
     onResultsChange(hits)
-  }, [hits, onResultsChange])
+  }, [effectiveSearchTerm, error, hits, onResultsChange])
 
-  // 高亮关键词的工具函数
-  const highlightText = useEvent((text: string, searchTerm: string) => {
-    return highlightSearchTerm(text, searchTerm)
-  })
+  useEffect(() => {
+    if (selectedIndex >= hits.length) {
+      onSelectedIndexChange(Math.max(0, hits.length - 1))
+    }
+  }, [hits.length, onSelectedIndexChange, selectedIndex])
+
+  const highlightText = highlightSearchTerm
 
   if (!searchTerm.trim()) {
     return (
@@ -159,6 +107,18 @@ export function SearchResults(props: SearchResultsProps) {
             </div>
           </div>
         ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-12 text-center text-muted-foreground">
+        <AlertCircleIcon className="mb-4 size-12 text-destructive/80" />
+        <div className="text-lg font-medium text-foreground">搜索服务暂时不可用</div>
+        <div className="text-sm mt-1 max-w-sm">
+          {error.message || '请稍后重试'}
+        </div>
       </div>
     )
   }
@@ -189,9 +149,7 @@ export function SearchResults(props: SearchResultsProps) {
               onSelectResult(hit.document.path)
             }
           }}
-          onMouseEnter={() => {
-            onSelectedIndexChange(idx)
-          }}
+          onMouseEnter={() => { onSelectedIndexChange(idx) }}
         />
       ))}
     </div>

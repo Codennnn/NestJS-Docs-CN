@@ -8,13 +8,22 @@ import { useLocalStorageArray } from './useLocalStorage'
 const STORAGE_KEY = 'doc-chat-sessions'
 const MAX_SESSIONS = 100 // 最多保存 100 个会话
 
+const STORAGE_OPTIONS = {
+  defaultValue: [] as ChatSession[],
+  onError: (error: Error, operation: string) => {
+    console.warn(`聊天会话 ${operation} 操作失败：`, error)
+  },
+}
+
+/**
+ * 将指定索引的元素移到数组最前面（不可变写法）
+ */
 function moveToFront<T>(arr: T[], index: number): T[] {
-  if (index > 0) {
-    const [item] = arr.splice(index, 1)
-    arr.unshift(item)
+  if (index <= 0) {
+    return arr
   }
 
-  return arr
+  return [arr[index], ...arr.slice(0, index), ...arr.slice(index + 1)]
 }
 
 // 生成会话 ID
@@ -42,12 +51,7 @@ function generateSessionTitle(messages: ChatMessage[]): string {
 export function useChatSessions() {
   const [sessions, setSessions, removeSessions, isLoading] = useLocalStorageArray<ChatSession>(
     STORAGE_KEY,
-    {
-      defaultValue: [],
-      onError: (error, operation) => {
-        console.warn(`聊天会话 ${operation} 操作失败：`, error)
-      },
-    },
+    STORAGE_OPTIONS,
   )
 
   const sessionsArray = useMemo(() => sessions ?? [], [sessions])
@@ -136,6 +140,31 @@ export function useChatSessions() {
     })
   })
 
+  // 用最新消息快照替换整个会话
+  const replaceMessages = useEvent((sessionId: string, messages: ChatMessage[]) => {
+    setSessions((prev) => {
+      const updated = (prev ?? []).map((session) => {
+        if (session.id !== sessionId) {
+          return session
+        }
+
+        const normalizedMessages = messages.map((msg) => ({
+          ...msg,
+          timestamp: msg.timestamp ?? Date.now(),
+        }))
+
+        return {
+          ...session,
+          messages: normalizedMessages,
+          title: session.title === '新对话' ? generateSessionTitle(normalizedMessages) : session.title,
+          updatedAt: Date.now(),
+        }
+      })
+
+      return moveToFront(updated, updated.findIndex((s) => s.id === sessionId))
+    })
+  })
+
   // 更新会话标题
   const renameSession = useEvent((sessionId: string, newTitle: string) => {
     setSessions((prev) =>
@@ -185,20 +214,27 @@ export function useChatSessions() {
   })
 
   const filterSessions = useCallback((filters: ChatSessionFilters = {}): ChatSession[] => {
-    let filtered = sessionsArray
+    const searchLower = filters.searchTerm?.toLowerCase()
 
-    // 过滤归档状态
-    if (!filters.showArchived) {
-      filtered = filtered.filter((session) => !session.archived)
-    }
+    // 单次遍历完成过滤 + 收集
+    const filtered: ChatSession[] = []
 
-    // 搜索过滤
-    if (filters.searchTerm) {
-      const searchLower = filters.searchTerm.toLowerCase()
-      filtered = filtered.filter((session) =>
-        session.title.toLowerCase().includes(searchLower)
-        || session.messages.some((msg) => msg.content.toLowerCase().includes(searchLower)),
-      )
+    for (const session of sessionsArray) {
+      // 过滤归档状态
+      if (!filters.showArchived && session.archived) {
+        continue
+      }
+
+      // 搜索过滤
+      if (
+        searchLower
+        && !session.title.toLowerCase().includes(searchLower)
+        && !session.messages.some((msg) => msg.content.toLowerCase().includes(searchLower))
+      ) {
+        continue
+      }
+
+      filtered.push(session)
     }
 
     // 排序：按更新时间降序
@@ -245,6 +281,7 @@ export function useChatSessions() {
     createSession,
     appendMessage,
     appendMessages,
+    replaceMessages,
     renameSession,
     archiveSession,
     restoreSession,

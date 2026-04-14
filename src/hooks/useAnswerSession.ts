@@ -3,11 +3,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useEvent } from 'react-use-event-hook'
 
-import { type AnswerSession, type Interaction, OramaClient } from '@oramacloud/client'
+import type { AnswerSession, Interaction } from '@orama/core'
 
+import { getOramaClient } from '~/lib/orama'
 import type { ChatMessage } from '~/types/chat'
 
-const USER_CONTEXT = '用户正在浏览 NestJS 中文文档网站，希望获得关于 NestJS 框架的准确和详细的答案。请用中文回答问题，并保持对话的连续性和上下文理解。'
+const DEFAULT_OPTIONS: UseAnswerSessionOptions = {}
 
 interface UseAnswerSessionOptions {
   /**
@@ -20,7 +21,7 @@ interface UseAnswerSessionReturn {
   /**
    * Orama 答案会话实例
    */
-  answerSession: AnswerSession<boolean> | null
+  answerSession: AnswerSession | null
   /**
    * 当前交互列表
    */
@@ -59,115 +60,176 @@ interface UseAnswerSessionReturn {
  * @param options 配置选项
  * @returns 会话状态和控制方法
  */
-export function useAnswerSession(options: UseAnswerSessionOptions = {}): UseAnswerSessionReturn {
+export function useAnswerSession(
+  options: UseAnswerSessionOptions = DEFAULT_OPTIONS,
+): UseAnswerSessionReturn {
   const {
     onLoadingChange,
   } = options
 
-  const [answerSession, setAnswerSession] = useState<AnswerSession<boolean> | null>(null)
+  const [answerSession, setAnswerSession] = useState<AnswerSession | null>(null)
   const [interactions, setInteractions] = useState<Interaction[]>([])
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
-  const answerSessionRef = useRef(answerSession)
+  const answerSessionRef = useRef<AnswerSession | null>(null)
   const isLoadingRef = useRef(false)
   const initialMessagesRef = useRef<ChatMessage[]>([])
+  const sessionVersionRef = useRef(0)
+  const messageTimestampRef = useRef(new Map<string, number>())
+
+  const updateLoadingState = useEvent((loading: boolean) => {
+    if (isLoadingRef.current !== loading) {
+      isLoadingRef.current = loading
+      setIsLoading(loading)
+      onLoadingChange?.(loading)
+    }
+  })
+
+  const resetMessageTimestamps = useEvent((seedMessages: ChatMessage[]) => {
+    const timestamps = new Map<string, number>()
+
+    seedMessages.forEach((message) => {
+      if (!message.interactionId) {
+        return
+      }
+
+      timestamps.set(
+        `${message.role}:${message.interactionId}`,
+        message.timestamp ?? Date.now(),
+      )
+    })
+
+    messageTimestampRef.current = timestamps
+  })
+
+  const getStableTimestamp = useEvent((role: ChatMessage['role'], interactionId: string) => {
+    const key = `${role}:${interactionId}`
+    const existingTimestamp = messageTimestampRef.current.get(key)
+
+    if (existingTimestamp) {
+      return existingTimestamp
+    }
+
+    const createdAt = Date.now()
+    messageTimestampRef.current.set(key, createdAt)
+
+    return createdAt
+  })
+
+  const buildMessagesFromInteractions = useEvent(
+    (currentInteractions: Interaction[]): ChatMessage[] => {
+      const interactionMessages = currentInteractions.flatMap((interaction) => {
+        const nextMessages: ChatMessage[] = []
+
+        if (interaction.query) {
+          nextMessages.push({
+            role: 'user',
+            content: interaction.query,
+            timestamp: getStableTimestamp('user', interaction.id),
+            interactionId: interaction.id,
+          })
+        }
+
+        if (interaction.response || interaction.error || interaction.aborted) {
+          nextMessages.push({
+            role: 'assistant',
+            content: interaction.response,
+            timestamp: getStableTimestamp('assistant', interaction.id),
+            interactionId: interaction.id,
+          })
+        }
+
+        return nextMessages
+      })
+
+      return [...initialMessagesRef.current, ...interactionMessages]
+    },
+  )
 
   /**
    * 初始化 Orama 答案会话
    */
-  const initializeAnswerSession = useEvent(() => {
-    try {
-      const orama = new OramaClient({
-        endpoint: process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!,
-        api_key: process.env.NEXT_PUBLIC_ORAMA_API_KEY!,
-      })
+  const initializeAnswerSession = useEvent(
+    (seedMessages: ChatMessage[] = initialMessagesRef.current) => {
+      const currentVersion = ++sessionVersionRef.current
 
-      const session = orama.createAnswerSession({
-        userContext: USER_CONTEXT,
-        inferenceType: 'documentation',
-        initialMessages: initialMessagesRef.current.map((msg) => ({
-          role: msg.role,
-          content: msg.content,
-        })),
-        events: {
-          onStateChange: (state) => {
-            const interactions = Array.isArray(state) ? state as Interaction[] : []
-            setInteractions(interactions)
+      try {
+        const orama = getOramaClient()
 
-            // 将交互转换为消息格式
-            const allMessages = interactions.reduce<ChatMessage[]>((messages, interaction) => {
-              if (interaction.query) {
-                messages.push({
-                  role: 'user',
-                  content: interaction.query,
-                  timestamp: Date.now(),
-                  interactionId: interaction.interactionId,
-                })
+        const session = orama.ai.createAISession({
+          initialMessages: seedMessages.map((msg) => ({
+            role: msg.role,
+            content: msg.content,
+          })),
+          events: {
+            onStateChange: (state) => {
+              if (currentVersion !== sessionVersionRef.current) {
+                return
               }
 
-              if (interaction.response) {
-                messages.push({
-                  role: 'assistant',
-                  content: interaction.response,
-                  timestamp: Date.now(),
-                  interactionId: interaction.interactionId,
-                })
-              }
+              const currentInteractions = Array.isArray(state) ? state : []
+              setInteractions(currentInteractions)
 
-              return messages
-            }, [])
+              // 从最新交互推导加载状态
+              const latestInteraction = currentInteractions.at(-1)
+              const currentlyLoading = latestInteraction?.loading ?? false
+              updateLoadingState(currentlyLoading)
 
-            setMessages(allMessages)
+              setMessages(buildMessagesFromInteractions(currentInteractions))
+            },
           },
+        })
 
-          onMessageLoading: (loading: boolean) => {
-            isLoadingRef.current = loading
-            setIsLoading(loading)
-            onLoadingChange?.(loading)
-          },
+        answerSessionRef.current = session
+        setAnswerSession(session)
+        setInteractions([])
+        setMessages(seedMessages)
 
-          onAnswerAborted: (aborted: boolean) => {
-            if (aborted) {
-              isLoadingRef.current = false
-              setIsLoading(false)
-            }
-          },
-        },
-      })
+        return session
+      }
+      catch (error) {
+        console.error('初始化答案会话失败：', error)
 
-      answerSessionRef.current = session
-      setAnswerSession(session)
-    }
-    catch (error) {
-      console.error('初始化答案会话失败：', error)
-    }
-  })
+        return null
+      }
+    },
+  )
 
   /**
    * 发送问题到 Orama 会话
    */
   const askQuestion = useEvent(async (question: string) => {
-    if (!answerSessionRef.current || !question.trim()) {
+    const trimmedQuestion = question.trim()
+
+    if (!trimmedQuestion) {
       return
     }
 
-    isLoadingRef.current = true
-    setIsLoading(true)
+    const session = answerSessionRef.current ?? initializeAnswerSession()
+
+    if (!session) {
+      return
+    }
+
+    updateLoadingState(true)
 
     try {
-      await answerSessionRef.current.ask({
-        term: question.trim(),
+      await session.answer({
+        query: trimmedQuestion,
         related: {
-          howMany: 3,
+          enabled: true,
+          size: 3,
           format: 'question',
         },
       })
     }
     catch (error) {
-      console.error('问答失败：', error)
-      isLoadingRef.current = false
-      setIsLoading(false)
+      if (!(error instanceof Error && error.name === 'AbortError')) {
+        console.error('问答失败：', error)
+      }
+
+      updateLoadingState(false)
     }
   })
 
@@ -177,9 +239,8 @@ export function useAnswerSession(options: UseAnswerSessionOptions = {}): UseAnsw
   const abortAnswer = useEvent(() => {
     if (answerSessionRef.current && isLoadingRef.current) {
       try {
-        answerSessionRef.current.abortAnswer()
-        isLoadingRef.current = false
-        setIsLoading(false)
+        answerSessionRef.current.abort()
+        updateLoadingState(false)
       }
       catch (error) {
         console.error('终止回答失败：', error)
@@ -191,21 +252,29 @@ export function useAnswerSession(options: UseAnswerSessionOptions = {}): UseAnsw
    * 设置初始消息并重新初始化会话
    */
   const handleSetInitialMessages = useEvent((newMessages: ChatMessage[]) => {
+    try {
+      answerSessionRef.current?.abort()
+    }
+    catch {
+      // 会话未处于活跃请求时 abort 会抛错，这里忽略即可
+    }
+
     initialMessagesRef.current = newMessages
+    resetMessageTimestamps(newMessages)
+    setInteractions([])
+    setMessages(newMessages)
     answerSessionRef.current = null
     setAnswerSession(null)
-    setInteractions([])
-    setMessages([])
-    isLoadingRef.current = false
-    setIsLoading(false)
+    updateLoadingState(false)
+    initializeAnswerSession(newMessages)
   })
 
   // 初始化会话
   useEffect(() => {
-    if (!answerSession) {
+    if (!answerSessionRef.current) {
       initializeAnswerSession()
     }
-  }, [answerSession, initializeAnswerSession])
+  }, [initializeAnswerSession])
 
   return {
     answerSession,

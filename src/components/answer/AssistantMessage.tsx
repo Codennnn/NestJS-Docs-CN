@@ -1,7 +1,9 @@
 'use client'
 
+import { memo, useMemo } from 'react'
+
 import Link from 'next/link'
-import type { Interaction } from '@oramacloud/client'
+import type { Interaction } from '@orama/core'
 import { BookOpenIcon, MessageSquarePlusIcon } from 'lucide-react'
 
 import { MDXRenderer } from '~/components/mdx/MDXRenderer'
@@ -24,7 +26,7 @@ interface SourcesListProps {
   sources: Source[]
 }
 
-function SourcesList(props: SourcesListProps) {
+const SourcesList = memo(function SourcesList(props: SourcesListProps) {
   const { sources } = props
 
   if (sources.length === 0) {
@@ -50,7 +52,7 @@ function SourcesList(props: SourcesListProps) {
       </div>
     </div>
   )
-}
+})
 
 // 相关问题组件
 interface RelatedQuestionsProps {
@@ -58,7 +60,7 @@ interface RelatedQuestionsProps {
   onQuestionClick: (question: string) => void
 }
 
-function RelatedQuestions(props: RelatedQuestionsProps) {
+const RelatedQuestions = memo(function RelatedQuestions(props: RelatedQuestionsProps) {
   const { questions, onQuestionClick } = props
 
   if (questions.length === 0) {
@@ -103,17 +105,78 @@ function RelatedQuestions(props: RelatedQuestionsProps) {
       </div>
     </div>
   )
+})
+
+/**
+ * 解析 Interaction.related 字段为相关问题数组
+ *
+ * 新 API 中 related 为 Nullable<string>，可能是：
+ * - JSON 数组字符串：'["问题1", "问题2"]'
+ * - 换行分隔的文本
+ * - null
+ */
+function parseRelatedQuestions(related: string | null): string[] {
+  if (!related) {
+    return []
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(related)
+
+    if (Array.isArray(parsed)) {
+      return parsed.filter((item): item is string => typeof item === 'string')
+    }
+  }
+  catch {
+    // 非 JSON 格式，按换行分隔处理
+  }
+
+  return related
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+}
+
+function extractSourceHits(
+  sources: Interaction['sources'] | null | undefined,
+): Source[] {
+  if (Array.isArray(sources)) {
+    return sources as Source[]
+  }
+
+  if (sources && typeof sources === 'object' && 'hits' in sources && Array.isArray(sources.hits)) {
+    return sources.hits as Source[]
+  }
+
+  return []
 }
 
 export function AssistantMessage(props: AssistantMessageProps) {
   const { content, interaction, onRelatedQuestionClick } = props
 
-  const hits = interaction?.sources?.hits ?? []
-  const relatedQueries = interaction?.relatedQueries ?? []
+  const hits = useMemo(
+    () => extractSourceHits(interaction?.sources ?? null),
+    [interaction?.sources],
+  )
+
+  const relatedQueries = useMemo(
+    () => parseRelatedQuestions(interaction?.related ?? null),
+    [interaction?.related],
+  )
+
+  const errorMessage = interaction?.error
+    ? interaction.errorMessage ?? '回答生成失败，请稍后重试。'
+    : null
 
   return (
     <ProseContainer className="prose-sm">
       <MDXRenderer content={content} />
+
+      {errorMessage && (
+        <div className="mt-3 rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive not-prose">
+          {errorMessage}
+        </div>
+      )}
 
       {/* 显示相关来源 */}
       <SourcesList
