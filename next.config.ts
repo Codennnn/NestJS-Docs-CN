@@ -71,16 +71,6 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      {
-        // 为图片文件添加额外的保护头
-        source: '/assets/:path*\\.(jpg|jpeg|png|gif|bmp|ico|svg|webp)',
-        headers: [
-          {
-            key: 'X-Image-Protection',
-            value: 'hotlink-protected',
-          },
-        ],
-      },
     ]
   },
 
@@ -116,23 +106,11 @@ const nextConfig: NextConfig = {
   // 启用实验性功能
   experimental: {
     // 优化字体加载
-    optimizePackageImports: ['lucide-react'],
+    optimizePackageImports: ['lucide-react', '@orama/core'],
   },
 
   // 性能优化
   poweredByHeader: false, // 移除 X-Powered-By 头
-
-  // async rewrites() {
-  //   const source = `${process.env.NEXT_PUBLIC_API_PROXY_SOURCE}/:path*`
-  //   const destination = `${process.env.NEXT_PUBLIC_API_PROXY_DESTINATION}/:path*`
-
-  //   return [
-  //     {
-  //       source,
-  //       destination,
-  //     },
-  //   ]
-  // },
 }
 
 // Turbopack 无法将 JavaScript 函数传递给 Rust 编译器，

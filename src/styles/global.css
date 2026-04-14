@@ -294,7 +294,7 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50 scroll-smooth;
+    @apply border-border outline-ring/50;
 
     /* 现代滚动条样式，让滚动条更纤细、更美观 */
     scrollbar-width: thin;

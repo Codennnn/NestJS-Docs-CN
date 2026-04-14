@@ -24,8 +24,6 @@ import { ThemeModeToggle } from '~/components/ThemeModeToggle'
 import { Button } from '~/components/ui/button'
 import { cn } from '~/lib/utils'
 
-import logo from '/public/logos/logo-128.png'
-
 interface SectionItem {
   icon: React.ComponentType<{ className?: string }>
   title: string
@@ -132,7 +130,7 @@ export default function HomePage() {
                 alt="NestJS Logo"
                 className="rounded-lg"
                 height={32}
-                src={logo}
+                src="/logos/logo-128.png"
                 width={32}
               />
               <span className="font-bold text-lg">
@@ -293,7 +291,7 @@ export default function HomePage() {
                   alt="NestJS Logo"
                   className="rounded-md"
                   height={24}
-                  src={logo}
+                  src="/logos/logo-32.png"
                   width={24}
                 />
                 <span className="text-lg font-bold tracking-tight">NestJS 中文社区</span>
