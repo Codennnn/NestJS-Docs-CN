@@ -18,14 +18,14 @@ import { ScrollGradientContainer } from '~/components/ScrollGradientContainer'
 import { Button } from '~/components/ui/button'
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
+  DialogPopup,
   DialogTitle,
 } from '~/components/ui/dialog'
 import { Input } from '~/components/ui/input'
-import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip'
 import { useChatSessions } from '~/hooks/useChatSessions'
 import type { ChatSession } from '~/types/chat'
 
@@ -153,19 +153,21 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps) {
         </div>
 
         <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              className="size-7"
-              size="icon"
-              variant="ghost"
-              onClick={() => onClose?.()}
-            >
-              <PanelLeftCloseIcon className="size-[1em]" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
+          <TooltipTrigger
+            render={(
+              <Button
+                className="size-7"
+                size="icon"
+                variant="ghost"
+                onClick={() => onClose?.()}
+              >
+                <PanelLeftCloseIcon className="size-[1em]" />
+              </Button>
+            )}
+          />
+          <TooltipPopup>
             关闭
-          </TooltipContent>
+          </TooltipPopup>
         </Tooltip>
       </div>
 
@@ -293,7 +295,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps) {
                           <p className="text-xs text-muted-foreground truncate flex-1">
                             {getMessagePreview(session)}
                           </p>
-                          <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">
+                          <span className="text-xs text-muted-foreground ml-2 shrink-0">
                             {formatDate(session.updatedAt)}
                           </span>
                         </div>
@@ -312,110 +314,122 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps) {
                       </div>
 
                       {/* 操作按钮 */}
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {!session.archived && (
-                          <>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  className="size-6"
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleEditStart(session)
-                                  }}
-                                >
-                                  <EditIcon className="size-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                重命名
-                              </TooltipContent>
-                            </Tooltip>
+                      <TooltipProvider closeDelay={0} delay={200}>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {!session.archived && (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={(
+                                    <Button
+                                      className="size-6"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleEditStart(session)
+                                      }}
+                                    >
+                                      <EditIcon className="size-3" />
+                                    </Button>
+                                  )}
+                                />
+                                <TooltipPopup>
+                                  重命名
+                                </TooltipPopup>
+                              </Tooltip>
 
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  className="size-6"
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    archiveSession(session.id)
-                                  }}
-                                >
-                                  <ArchiveIcon className="size-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                归档
-                              </TooltipContent>
-                            </Tooltip>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={(
+                                    <Button
+                                      className="size-6"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        archiveSession(session.id)
+                                      }}
+                                    >
+                                      <ArchiveIcon className="size-3" />
+                                    </Button>
+                                  )}
+                                />
+                                <TooltipPopup>
+                                  归档
+                                </TooltipPopup>
+                              </Tooltip>
 
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  className="size-6"
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    handleDeleteClick(session)
-                                  }}
-                                >
-                                  <Trash2Icon className="size-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                删除
-                              </TooltipContent>
-                            </Tooltip>
-                          </>
-                        )}
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={(
+                                    <Button
+                                      className="size-6"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleDeleteClick(session)
+                                      }}
+                                    >
+                                      <Trash2Icon className="size-3" />
+                                    </Button>
+                                  )}
+                                />
+                                <TooltipPopup>
+                                  删除
+                                </TooltipPopup>
+                              </Tooltip>
+                            </>
+                          )}
 
-                        {session.archived && (
-                          <>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  className="size-6"
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    restoreSession(session.id)
-                                  }}
-                                >
-                                  <ArchiveIcon className="size-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                恢复
-                              </TooltipContent>
-                            </Tooltip>
+                          {session.archived && (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={(
+                                    <Button
+                                      className="size-6"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        restoreSession(session.id)
+                                      }}
+                                    >
+                                      <ArchiveIcon className="size-3" />
+                                    </Button>
+                                  )}
+                                />
+                                <TooltipPopup>
+                                  恢复
+                                </TooltipPopup>
+                              </Tooltip>
 
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  className="size-6"
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    deleteSession(session.id)
-                                  }}
-                                >
-                                  <Trash2Icon className="size-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                永久删除
-                              </TooltipContent>
-                            </Tooltip>
-                          </>
-                        )}
-                      </div>
+                              <Tooltip>
+                                <TooltipTrigger
+                                  render={(
+                                    <Button
+                                      className="size-6"
+                                      size="icon"
+                                      variant="ghost"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        deleteSession(session.id)
+                                      }}
+                                    >
+                                      <Trash2Icon className="size-3" />
+                                    </Button>
+                                  )}
+                                />
+                                <TooltipPopup>
+                                  永久删除
+                                </TooltipPopup>
+                              </Tooltip>
+                            </>
+                          )}
+                        </div>
+                      </TooltipProvider>
                     </div>
                   </div>
                 ))}
@@ -432,7 +446,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps) {
           }
         }}
       >
-        <DialogContent>
+        <DialogPopup>
           <DialogHeader>
             <DialogTitle>删除对话</DialogTitle>
             <DialogDescription>
@@ -469,7 +483,7 @@ export function ChatHistoryPanel(props: ChatHistoryPanelProps) {
               确认删除
             </Button>
           </DialogFooter>
-        </DialogContent>
+        </DialogPopup>
       </Dialog>
     </div>
   )

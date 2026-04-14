@@ -2,7 +2,7 @@ import { startTransition, useEffect, useState } from 'react'
 
 import { CommandIcon } from 'lucide-react'
 
-import { KeyboardKey } from '~/components/ui/kbd'
+import { Kbd } from '~/components/ui/kbd'
 import { useKeyboardShortcut } from '~/hooks/useKeyboardShortcut'
 import { cn } from '~/lib/utils'
 import { isMacOS } from '~/utils/platform'
@@ -58,7 +58,7 @@ export function ShortcutKey(props: ShortcutKeyProps) {
   return (
     <div className={cn('flex items-center gap-1', className)}>
       {useModifier && isMac !== null && (
-        <KeyboardKey>
+        <Kbd>
           {isMac
             ? (
                 <CommandIcon className="size-2.5" />
@@ -66,12 +66,12 @@ export function ShortcutKey(props: ShortcutKeyProps) {
             : (
                 'Ctrl'
               )}
-        </KeyboardKey>
+        </Kbd>
       )}
 
-      <KeyboardKey>
+      <Kbd>
         {mainKey.toUpperCase()}
-      </KeyboardKey>
+      </Kbd>
     </div>
   )
 }

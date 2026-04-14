@@ -1,49 +1,28 @@
-import { forwardRef } from 'react'
-
-import { cva, type VariantProps } from 'class-variance-authority'
+import type { ComponentProps } from 'react'
 
 import { cn } from '~/lib/utils'
 
-const keyboardKeyVariants = cva(
-  'pointer-events-none inline-flex select-none items-center gap-1 rounded border bg-muted font-mono font-semibold',
-  {
-    variants: {
-      size: {
-        default: 'h-5 px-1.5 text-[10px]',
-        sm: 'h-4 px-1 text-[9px]',
-        lg: 'h-6 px-2 text-xs',
-      },
-      variant: {
-        default: 'border bg-muted',
-        outline: 'border-2 bg-background',
-        ghost: 'border-transparent bg-muted/50',
-      },
-    },
-    defaultVariants: {
-      size: 'default',
-      variant: 'default',
-    },
-  },
-)
+function Kbd({ className, ...props }: ComponentProps<'kbd'>) {
+  return (
+    <kbd
+      className={cn(
+        'pointer-events-none inline-flex h-5 min-w-5 select-none items-center justify-center gap-1 rounded bg-muted px-1 font-medium font-sans text-muted-foreground text-xs [&_svg:not([class*=\'size-\'])]:size-3',
+        className,
+      )}
+      data-slot="kbd"
+      {...props}
+    />
+  )
+}
 
-interface KeyboardKeyProps
-  extends React.ComponentProps<'kbd'>,
-  VariantProps<typeof keyboardKeyVariants> {}
+function KbdGroup({ className, ...props }: ComponentProps<'kbd'>) {
+  return (
+    <kbd
+      className={cn('inline-flex items-center gap-1', className)}
+      data-slot="kbd-group"
+      {...props}
+    />
+  )
+}
 
-const KeyboardKey = forwardRef<HTMLElement, KeyboardKeyProps>(
-  ({ className, size, variant, children, ...props }, ref) => {
-    return (
-      <kbd
-        ref={ref}
-        className={cn(keyboardKeyVariants({ size, variant, className }))}
-        {...props}
-      >
-        {children}
-      </kbd>
-    )
-  },
-)
-
-KeyboardKey.displayName = 'KeyboardKey'
-
-export { KeyboardKey, keyboardKeyVariants }
+export { Kbd, KbdGroup }

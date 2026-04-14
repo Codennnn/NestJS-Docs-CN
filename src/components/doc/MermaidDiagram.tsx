@@ -4,11 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useEvent } from 'react-use-event-hook'
 
 import { MaximizeIcon, MinimizeIcon, RotateCcwIcon, ZoomInIcon, ZoomOutIcon } from 'lucide-react'
-import mermaid from 'mermaid'
 
 import { Button } from '~/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog'
-import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
+import { Dialog, DialogDescription, DialogPopup, DialogTitle } from '~/components/ui/dialog'
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip'
 import { cn } from '~/lib/utils'
 
 interface ControlButtonProps extends React.ComponentProps<typeof Button> {
@@ -21,24 +20,26 @@ function ControlButton(props: ControlButtonProps) {
 
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          aria-label={label}
-          className="rounded-[0.2rem]"
-          size="iconSm"
-          variant="ghost"
-          onClick={onClick}
-        >
-          {icon}
-        </Button>
+      <TooltipTrigger
+        render={(
+          <Button
+            aria-label={label}
+            className="rounded-[0.2rem]"
+            size="icon-sm"
+            variant="ghost"
+            onClick={onClick}
+          />
+        )}
+      >
+        {icon}
       </TooltipTrigger>
 
-      <TooltipContent
+      <TooltipPopup
         align="center"
         side="top"
       >
         {label}
-      </TooltipContent>
+      </TooltipPopup>
     </Tooltip>
 
   )
@@ -73,7 +74,7 @@ function MermaidChart(props: MermaidChartProps) {
     setScale((prevScale) => {
       const newScale = prevScale + delta
 
-      return newScale < 0.5 ? 0.5 : newScale > 3 ? 3 : newScale
+      return newScale < 0.2 ? 0.2 : newScale > 5 ? 5 : newScale
     })
   })
 
@@ -150,7 +151,7 @@ function MermaidChart(props: MermaidChartProps) {
       ev.stopPropagation()
 
       // 根据滚轮方向决定缩放方向
-      const delta = ev.deltaY < 0 ? 0.1 : -0.1
+      const delta = ev.deltaY < 0 ? 0.25 : -0.25
       handleZoom(delta)
     }
   })
@@ -170,7 +171,7 @@ function MermaidChart(props: MermaidChartProps) {
       window.removeEventListener('mouseup', handleDragEnd)
       window.removeEventListener('touchend', handleDragEnd)
     }
-  }, [isDragging, dragStart, handleDrag, handleDragEnd])
+  }, [isDragging, handleDrag, handleDragEnd])
 
   /**
    * 使用原生 DOM API 添加滚轮事件监听器
@@ -196,7 +197,7 @@ function MermaidChart(props: MermaidChartProps) {
         chartElement.removeEventListener('wheel', handleWheel)
       }
     }
-  }, [handleWheel, isFullScreen])
+  }, [handleWheel])
 
   // 重置位置和缩放
   const resetView = () => {
@@ -215,6 +216,10 @@ function MermaidChart(props: MermaidChartProps) {
       onTouchStart={handleDragStart}
     >
       <div
+        className={cn(
+          'flex items-center justify-center',
+          isFullScreen ? 'size-full [&>svg]:w-full [&>svg]:h-full [&>svg]:max-w-none!' : '[&>svg]:max-w-full [&>svg]:h-auto',
+        )}
         dangerouslySetInnerHTML={{ __html: rendered }}
         style={{
           transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
@@ -225,47 +230,56 @@ function MermaidChart(props: MermaidChartProps) {
       />
 
       {/* 控制按钮 */}
-      {showControls && (
-        <div
-          className={cn(
-            'absolute',
-            'flex gap-1 z-10 rounded-sm p-0.5 border border-border bg-background/50 backdrop-blur-sm shadow-xs',
-            isFullScreen ? 'top-4 right-4' : 'top-1 right-1',
-            !isFullScreen && 'group-hover/mermaid-chart:opacity-100 opacity-0 transition-opacity',
-            controlsClassName,
-          )}
-        >
-          <ControlButton
-            icon={<ZoomInIcon className="size-[1em]" />}
-            label="放大"
-            onClick={() => { handleZoom(0.1) }}
-          />
+      {showControls
+        ? (
+            <TooltipProvider
+              closeDelay={0}
+              delay={200}
+            >
+              <div
+                className={cn(
+                  'absolute',
+                  'flex gap-1 z-10 rounded-sm p-0.5 border border-border bg-background/50 backdrop-blur-sm shadow-xs',
+                  isFullScreen ? 'top-4 right-4' : 'top-1 right-1',
+                  !isFullScreen && 'group-hover/mermaid-chart:opacity-100 opacity-0 transition-opacity',
+                  controlsClassName,
+                )}
+              >
+                <ControlButton
+                  icon={<ZoomInIcon className="size-[1em]" />}
+                  label="放大"
+                  onClick={() => { handleZoom(0.5) }}
+                />
 
-          <ControlButton
-            icon={<ZoomOutIcon className="size-[1em]" />}
-            label="缩小"
-            onClick={() => { handleZoom(-0.1) }}
-          />
+                <ControlButton
+                  icon={<ZoomOutIcon className="size-[1em]" />}
+                  label="缩小"
+                  onClick={() => { handleZoom(-0.5) }}
+                />
 
-          <ControlButton
-            icon={<RotateCcwIcon className="size-[1em]" />}
-            label="重置视图"
-            onClick={() => { resetView() }}
-          />
+                <ControlButton
+                  icon={<RotateCcwIcon className="size-[1em]" />}
+                  label="重置视图"
+                  onClick={resetView}
+                />
 
-          {toggleFullScreen && (
-            <ControlButton
-              icon={
-                isFullScreen
-                  ? <MinimizeIcon className="size-[1em]" />
-                  : <MaximizeIcon className="size-[1em]" />
-              }
-              label={isFullScreen ? '退出全屏' : '切换全屏'}
-              onClick={() => { toggleFullScreen() }}
-            />
-          )}
-        </div>
-      )}
+                {toggleFullScreen
+                  ? (
+                      <ControlButton
+                        icon={
+                          isFullScreen
+                            ? <MinimizeIcon className="size-[1em]" />
+                            : <MaximizeIcon className="size-[1em]" />
+                        }
+                        label={isFullScreen ? '退出全屏' : '切换全屏'}
+                        onClick={toggleFullScreen}
+                      />
+                    )
+                  : null}
+              </div>
+            </TooltipProvider>
+          )
+        : null}
     </div>
   )
 }
@@ -283,17 +297,18 @@ export function MermaidDiagram(props: MermaidDiagramProps) {
 
   // 处理 mermaid 初始化和图表渲染
   useEffect(() => {
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'neutral',
-      securityLevel: 'loose',
-      fontFamily: 'var(--font-maple-mono)',
-    })
-
     // 确保初始化完成后再渲染图表
     const renderChart = async () => {
       if (chart.trim() !== '') {
         try {
+          const mermaid = (await import('mermaid')).default
+          mermaid.initialize({
+            startOnLoad: false,
+            theme: 'neutral',
+            securityLevel: 'loose',
+            fontFamily: 'var(--font-maple-mono)',
+          })
+
           const { svg } = await mermaid.render(`mermaid-${Date.now()}`, chart)
           setRendered(svg)
         }
@@ -322,7 +337,7 @@ export function MermaidDiagram(props: MermaidDiagramProps) {
       >
         <div className="relative bg-background size-full flex items-center justify-center rounded-[0.3rem] overflow-hidden p-1">
           <MermaidChart
-            className="min-h-[200px] max-h-[500px]"
+            className="min-h-50 max-h-125"
             isFullScreen={isFullScreen}
             rendered={rendered}
             toggleFullScreen={toggleFullScreen}
@@ -331,7 +346,7 @@ export function MermaidDiagram(props: MermaidDiagramProps) {
       </div>
 
       <Dialog open={isFullScreen} onOpenChange={setIsFullScreen}>
-        <DialogContent fullScreen className="overflow-hidden" showCloseButton={false}>
+        <DialogPopup fullScreen className="overflow-hidden" showCloseButton={false}>
           <DialogTitle className="sr-only">
             .
           </DialogTitle>
@@ -341,12 +356,12 @@ export function MermaidDiagram(props: MermaidDiagramProps) {
           </DialogDescription>
 
           <MermaidChart
-            className="p-5"
+            className="p-5 flex items-center justify-center bg-background"
             isFullScreen={isFullScreen}
             rendered={rendered}
             toggleFullScreen={toggleFullScreen}
           />
-        </DialogContent>
+        </DialogPopup>
       </Dialog>
     </div>
   )

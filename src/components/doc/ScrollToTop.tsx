@@ -79,7 +79,7 @@ export function ScrollToTop(props: ScrollToTopProps) {
 
   return (
     <Button
-      className="inline-flex items-center gap-2 h-6 transition-all animate-in fade-in-0 slide-in-from-bottom-2 justify-start text-xs text-muted-foreground"
+      className="inline-flex items-center gap-2 h-6 transition-all animate-in fade-in-0 slide-in-from-bottom-2 justify-start text-muted-foreground"
       size="sm"
       title="回到顶部"
       variant="ghost"
@@ -88,7 +88,7 @@ export function ScrollToTop(props: ScrollToTopProps) {
       }}
     >
       <CircleChevronUp className="size-3.5" />
-      回到顶部
+      <span className="text-xs">回到顶部</span>
     </Button>
   )
 }

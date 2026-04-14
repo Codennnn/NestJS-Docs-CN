@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 
 import {
   Dialog,
-  DialogContent,
+  DialogPopup,
 } from '~/components/ui/dialog'
 
 import { SearchDialogContent } from './SearchDialogContent'
@@ -24,12 +24,12 @@ export function SearchDialog({ open, onOpenChange }: SearchDialogProps) {
       open={open}
       onOpenChange={onOpenChange}
     >
-      <DialogContent
+      <DialogPopup
         className="max-w-3xl h-[clamp(200px,50vh,650px)] p-0 gap-0 overflow-hidden outline-background/60 outline-4"
         showCloseButton={false}
       >
         <SearchDialogContent onClose={handleClose} />
-      </DialogContent>
+      </DialogPopup>
     </Dialog>
   )
 }

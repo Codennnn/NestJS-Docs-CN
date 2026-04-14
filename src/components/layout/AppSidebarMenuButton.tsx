@@ -20,6 +20,10 @@ interface AppSidebarMenuButtonProps extends React.ComponentProps<typeof SidebarM
   item: SidebarMenuItemType
 }
 
+interface AppSidebarMenuSubButtonProps extends React.ComponentProps<typeof SidebarMenuSubButton> {
+  item: SidebarMenuItemType
+}
+
 export function AppSidebarMenuButton(
   { children, item, ...restProps }: React.PropsWithChildren<AppSidebarMenuButtonProps>,
 ) {
@@ -37,22 +41,24 @@ export function AppSidebarMenuButton(
 }
 
 export function AppSidebarMenuSubButton(
-  { children, item }: React.PropsWithChildren<{ item: SidebarMenuItemType }>,
+  { children, item, ...restProps }: React.PropsWithChildren<AppSidebarMenuSubButtonProps>,
 ) {
   const pathname = usePathname()
   const isActive = pathname === `${RoutePath.Docs}${item.url}`
 
   return (
     <SidebarMenuSubButton
-      asChild
       isActive={isActive}
+      {...restProps}
     >
       {children}
     </SidebarMenuSubButton>
   )
 }
 
-export function SidebarMenuButtonContent({ item }: { item: SidebarMenuItemType }) {
+export function SidebarMenuButtonContent(
+  { item, isOpen }: { item: SidebarMenuItemType, isOpen?: boolean },
+) {
   return (
     <>
       <span className="flex-1 truncate min-w-0">
@@ -62,8 +68,13 @@ export function SidebarMenuButtonContent({ item }: { item: SidebarMenuItemType }
       {item.items && item.items.length > 0
         ? (
             <span className="ml-auto shrink-0">
-              <ChevronRightIcon className="collapsible-group-closed group-data-[state=open]/collapsible:hidden" size={14} />
-              <ChevronDownIcon className="collapsible-group-open group-data-[state=closed]/collapsible:hidden" size={14} />
+              {isOpen
+                ? (
+                    <ChevronDownIcon className="collapsible-group-open" size={14} />
+                  )
+                : (
+                    <ChevronRightIcon className="collapsible-group-closed" size={14} />
+                  )}
             </span>
           )
         : null}

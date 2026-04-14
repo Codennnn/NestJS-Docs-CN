@@ -116,7 +116,7 @@ export default function HomePage() {
       {/* Header */}
       <header
         className={cn(
-          'fixed top-0 z-50 w-full pb-4 transition-all duration-300 text-foreground-accent',
+          'fixed top-0 z-99 w-full pb-4 transition-all duration-300 text-foreground-accent',
           isScrolled
             ? 'bg-linear-to-b from-background via-background/97 to-transparent'
             : 'bg-transparent',
@@ -150,13 +150,13 @@ export default function HomePage() {
               </Link>
             </nav>
 
-            <div className="md:flex items-center space-x-3">
+            <div className="md:flex items-center gap-x-3">
               <Button
-                asChild
+                render={<Link href="/docs" />}
                 size="sm"
                 variant="ghost"
               >
-                <Link href="/docs">开始阅读</Link>
+                开始阅读
               </Button>
 
               <ThemeModeToggle
@@ -171,7 +171,7 @@ export default function HomePage() {
       </header>
 
       <section className="relative pt-20">
-        <div className="container mx-auto">
+        <div className="container mx-auto relative z-50">
           <div className="py-16 md:py-20 lg:py-32">
             <div className="mx-auto px-4 sm:px-6 lg:px-8 z-10 relative">
               <div className="max-w-4xl mx-auto text-center">
@@ -190,11 +190,9 @@ export default function HomePage() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-                  <Button asChild className="w-full sm:w-auto" size="lg">
-                    <Link href="/docs">
-                      <BookOpen className="size-4" />
-                      立即开始学习
-                    </Link>
+                  <Button className="w-full sm:w-auto" render={<Link href="/docs" />} size="lg">
+                    <BookOpen className="size-4" />
+                    立即开始学习
                   </Button>
                 </div>
               </div>
@@ -205,7 +203,17 @@ export default function HomePage() {
         <div className="h-12 @md:h-16 @xl:h-20" />
 
         <div className="color-bg">
-          <div className="noise-bg" />
+          <div className="noise-bg z-20" />
+          <div className="flex items-center z-10 absolute top-0 bottom-0 left-1/2 -translate-x-1/2">
+            {
+              Array.from({ length: 30 }).map((_, idx) => (
+                <div
+                  key={idx}
+                  className="relative h-full w-[68.7969px] shrink-0 backdrop-blur-xl bg-linear-to-r from-black/1.5 to-white/3"
+                />
+              ))
+            }
+          </div>
         </div>
       </section>
 
@@ -271,11 +279,11 @@ export default function HomePage() {
               立即查阅中文官方文档，体验前所未有的开发效能。
             </p>
             <Button
-              asChild
-              className="h-auto px-8 py-4 text-lg font-bold bg-background text-foreground hover:bg-background/90 hover:shadow-lg transition-all duration-300"
+              className="text-foreground bg-background border-background hover:text-foreground hover:bg-background"
+              render={<Link href="/docs" />}
               size="lg"
             >
-              <Link href="/docs">开启 NestJS 之旅</Link>
+              开启 NestJS 之旅
             </Button>
           </div>
         </div>

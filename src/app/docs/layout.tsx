@@ -41,19 +41,19 @@ export default function DocsLayout(props: React.PropsWithChildren) {
                 <div
                   className="flex relative w-full"
                 >
-                  <div className="flex-1 min-w-0 max-w-full px-[var(--content-padding)]">
+                  <div className="flex-1 min-w-0 max-w-full px-(--content-padding)">
                     {props.children}
                   </div>
 
                   <aside
                     className={cn(
                       'sticky top-0 h-[calc(100vh-var(--header-height))] z-50',
-                      '@2xl/docs-content:[--aside-width:calc(var(--spacing)_*_64)] [--aside-width:calc(var(--spacing)_*_60)]',
-                      'w-[var(--aside-width)] @2xl:w-[var(--aside-width)]',
+                      '@2xl/docs-content:[--aside-width:--spacing(64)] [--aside-width:--spacing(60)]',
+                      'w-(--aside-width) @2xl:w-(--aside-width)',
                       'hidden @4xl/docs-content:block',
                     )}
                   >
-                    <div className="max-h-full w-full pt-[var(--content-padding)] pr-[calc(var(--content-padding)_/_2)] @6xl:pr-[var(--content-padding)] inline-flex flex-col pb-[calc(var(--content-padding)_/_2)] overflow-hidden">
+                    <div className="max-h-full w-full pt-(--content-padding) pr-[calc(var(--content-padding)/2)] @6xl:pr-(--content-padding) inline-flex flex-col pb-[calc(var(--content-padding)/2)] overflow-hidden">
                       <ScrollGradientContainer enableFlex className="pb-4">
                         <TableOfContents />
                       </ScrollGradientContainer>

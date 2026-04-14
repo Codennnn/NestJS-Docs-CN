@@ -47,7 +47,7 @@ export function CopyButton(props: CopyButtonProps) {
   return (
     <Button
       disabled={!text}
-      size="iconSm"
+      size="icon-sm"
       variant="ghost"
       onClick={() => {
         void handleCopy()

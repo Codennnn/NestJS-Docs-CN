@@ -66,21 +66,19 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <Link href={RoutePath.Home}>
-              <SidebarMenuButton asChild size="lg">
-                <div className="flex items-center gap-2">
-                  <div className="flex justify-center items-center">
-                    <Image
-                      alt="NestJS Logo"
-                      height={32}
-                      src={SITE_CONFIG.logoPath}
-                      width={32}
-                    />
-                  </div>
+              <SidebarMenuButton render={<div className="flex items-center gap-2" />} size="lg">
+                <div className="flex justify-center items-center">
+                  <Image
+                    alt="NestJS Logo"
+                    height={32}
+                    src={SITE_CONFIG.logoPath}
+                    width={32}
+                  />
+                </div>
 
-                  <div className="flex flex-col gap-0.5">
-                    <div className="font-semibold">NestJS 中文文档</div>
-                    <div className="text-xs text-muted-foreground font-medium">v10.0.0</div>
-                  </div>
+                <div className="flex flex-col gap-0.5">
+                  <div className="font-semibold">NestJS 中文文档</div>
+                  <div className="text-xs text-muted-foreground font-medium">v10.0.0</div>
                 </div>
               </SidebarMenuButton>
             </Link>

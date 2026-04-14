@@ -8,7 +8,7 @@ import { BookOpenIcon, MessageSquarePlusIcon } from 'lucide-react'
 
 import { MDXRenderer } from '~/components/mdx/MDXRenderer'
 import { ProseContainer } from '~/components/ProseContainer'
-import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip'
 import type { SearchDocument } from '~/types/doc'
 
 interface Source {
@@ -71,38 +71,38 @@ const RelatedQuestions = memo(function RelatedQuestions(props: RelatedQuestionsP
     <div className="mt-2 pt-2 border-t border-border/50">
       <div className="font-medium mb-1.5">相关问题：</div>
 
-      <div className="space-y-0.5">
-        {questions.map((query: string, queryIdx: number) => (
-          <div
-            key={queryIdx}
-            className="flex items-center justify-start gap-1 text-[0.8em] text-blue-500 hover:underline underline-offset-2 group/question cursor-pointer"
-            role="button"
-            tabIndex={0}
-            onClick={() => {
-              onQuestionClick(query)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
+      <TooltipProvider closeDelay={0} delay={200}>
+        <div className="space-y-0.5">
+          {questions.map((query: string, queryIdx: number) => (
+            <div
+              key={queryIdx}
+              className="flex items-center justify-start gap-1 text-[0.8em] text-blue-500 hover:underline underline-offset-2 group/question cursor-pointer"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
                 onQuestionClick(query)
-              }
-            }}
-          >
-            {query}
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onQuestionClick(query)
+                }
+              }}
+            >
+              {query}
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-flex">
+              <Tooltip>
+                <TooltipTrigger render={<span className="inline-flex" />}>
                   <MessageSquarePlusIcon className="size-[1em] opacity-0 group-hover/question:opacity-100 transition-opacity" />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                添加到提问
-              </TooltipContent>
-            </Tooltip>
-          </div>
-        ))}
-      </div>
+                </TooltipTrigger>
+                <TooltipPopup>
+                  添加到提问
+                </TooltipPopup>
+              </Tooltip>
+            </div>
+          ))}
+        </div>
+      </TooltipProvider>
     </div>
   )
 })

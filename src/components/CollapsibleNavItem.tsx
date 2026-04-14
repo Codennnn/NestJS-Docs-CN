@@ -92,37 +92,44 @@ export function CollapsibleNavItem(props: CollapsibleNavItemProps) {
       onOpenChange={handleOpenChange}
     >
       <SidebarMenuItem>
-        <CollapsibleTrigger asChild>
-          {item.url
-            ? (
-                <AppSidebarMenuButton asChild item={item}>
-                  <Link
-                    href={getDocLinkHref(item.url)}
-                    target={isExternalLink(item.url) ? '_blank' : undefined}
-                    onMouseEnter={() => {
-                      if (item.url) {
-                        handleMouseEnter(item.url)
-                      }
-                    }}
-                  >
-                    <SidebarMenuButtonContent item={item} />
+        <CollapsibleTrigger
+          nativeButton={!item.url}
+          render={
+            item.url
+              ? (
+                  <AppSidebarMenuButton
+                    item={item}
+                    render={(
+                      <Link
+                        href={getDocLinkHref(item.url)}
+                        target={isExternalLink(item.url) ? '_blank' : undefined}
+                        onMouseEnter={() => {
+                          if (item.url) {
+                            handleMouseEnter(item.url)
+                          }
+                        }}
+                      />
+                    )}
+                  />
+                )
+              : (
+                  <AppSidebarMenuButton item={item} />
+                )
+          }
+        >
+          <SidebarMenuButtonContent
+            isOpen={isOpen}
+            item={item}
+          />
 
-                    {isExternalLink(item.url)
-                      ? (
-                          <ArrowUpRightIcon
-                            className="opacity-50"
-                            size={14}
-                          />
-                        )
-                      : null}
-                  </Link>
-                </AppSidebarMenuButton>
+          {item.url && isExternalLink(item.url)
+            ? (
+                <ArrowUpRightIcon
+                  className="opacity-50"
+                  size={14}
+                />
               )
-            : (
-                <AppSidebarMenuButton item={item}>
-                  <SidebarMenuButtonContent item={item} />
-                </AppSidebarMenuButton>
-              )}
+            : null}
         </CollapsibleTrigger>
 
         {
@@ -144,33 +151,36 @@ export function CollapsibleNavItem(props: CollapsibleNavItemProps) {
                               )
                             : (
                                 // 如果没有嵌套项，渲染普通的菜单项
-                                <AppSidebarMenuSubButton item={subItem}>
-                                  {subItem.url
-                                    ? (
-                                        <Link
-                                          href={getDocLinkHref(subItem.url)}
-                                          target={isExternalLink(subItem.url) ? '_blank' : undefined}
-                                          onMouseEnter={() => {
-                                            if (subItem.url) {
-                                              handleMouseEnter(subItem.url)
-                                            }
-                                          }}
-                                        >
-                                          <span className="flex-1 truncate min-w-0">
-                                            {subItem.title}
-                                          </span>
+                                <AppSidebarMenuSubButton
+                                  item={subItem}
+                                  render={
+                                    subItem.url
+                                      ? (
+                                          <Link
+                                            href={getDocLinkHref(subItem.url)}
+                                            target={isExternalLink(subItem.url) ? '_blank' : undefined}
+                                            onMouseEnter={() => {
+                                              if (subItem.url) {
+                                                handleMouseEnter(subItem.url)
+                                              }
+                                            }}
+                                          />
+                                        )
+                                      : undefined
+                                  }
+                                >
+                                  <span className="flex-1 truncate min-w-0">
+                                    {subItem.title}
+                                  </span>
 
-                                          {isExternalLink(subItem.url)
-                                            ? (
-                                                <ArrowUpRightIcon
-                                                  className="ml-auto opacity-50"
-                                                  size={14}
-                                                />
-                                              )
-                                            : null}
-                                        </Link>
+                                  {subItem.url && isExternalLink(subItem.url)
+                                    ? (
+                                        <ArrowUpRightIcon
+                                          className="ml-auto opacity-50"
+                                          size={14}
+                                        />
                                       )
-                                    : subItem.title}
+                                    : null}
                                 </AppSidebarMenuSubButton>
                               )}
                         </SidebarMenuSubItem>

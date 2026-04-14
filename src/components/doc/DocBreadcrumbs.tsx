@@ -108,8 +108,8 @@ export function DocBreadcrumbs({ className }: DocBreadcrumbsProps) {
             <BreadcrumbItem>
               {crumb.url
                 ? (
-                    <BreadcrumbLink asChild>
-                      <Link href={crumb.url}>{crumb.name}</Link>
+                    <BreadcrumbLink render={<Link href={crumb.url} />}>
+                      {crumb.name}
                     </BreadcrumbLink>
                   )
                 : (

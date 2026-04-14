@@ -54,13 +54,13 @@ export function EmptyState(props: EmptyStateProps) {
       <div className="flex flex-col items-center p-5">
         {/* 更大的图标和渐变效果 */}
         <div className="relative mb-4">
-          <div className="absolute inset-0 bg-gradient-to-r from-theme/20 to-theme2/20 rounded-full blur-xl" />
+          <div className="absolute inset-0 bg-linear-to-r from-theme/20 to-theme2/20 rounded-full blur-xl" />
           <MessageCircleIcon className="size-12 text-theme" />
         </div>
 
         <div className="text-lg font-semibold mb-2">NestJS AI 助手</div>
 
-        <div className="text-sm text-muted-foreground mb-6 text-center max-w-xs">
+        <div className="text-xs text-muted-foreground mb-6 text-center max-w-xs">
           基于官方文档，为你提供准确的 NestJS 开发指导
         </div>
       </div>
@@ -72,7 +72,7 @@ export function EmptyState(props: EmptyStateProps) {
         {randomSuggestedQuestions.map((question, idx) => (
           <Button
             key={idx}
-            className="w-full justify-start text-left h-auto py-2 px-4 font-normal"
+            className="w-full justify-start text-left font-normal p-4"
             size="sm"
             variant="outline"
             onClick={() => {

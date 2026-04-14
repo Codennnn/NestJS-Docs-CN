@@ -100,11 +100,11 @@ export function MessageInput(props: MessageInputProps) {
   return (
     <div className="p-panel pt-0">
       {/* AI 问答渐变边框容器 */}
-      <div className="relative p-0.5 rounded-xl bg-gradient-to-r from-theme/60 to-theme2/40">
+      <div className="relative p-0.5 rounded-xl bg-linear-to-r from-theme/60 to-theme2/40">
         <div className="rounded-[12px] overflow-hidden bg-background">
           <Textarea
             ref={inputRef}
-            className="!text-[13px] p-2 resize-none border-none shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent disabled:opacity-80"
+            className="text-[13px]! p-2 resize-none border-none shadow-none outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:border-none bg-transparent disabled:opacity-80"
             disabled={isLoading}
             placeholder={
               hasMessages
@@ -120,7 +120,7 @@ export function MessageInput(props: MessageInputProps) {
             {isLoading
               ? (
                   <Button
-                    className="!text-xs !py-1 !px-1.5 h-auto !gap-1"
+                    className="text-xs! py-1! px-1.5! h-auto gap-1!"
                     size="sm"
                     variant="outline"
                     onClick={onStopGeneration}
@@ -131,7 +131,7 @@ export function MessageInput(props: MessageInputProps) {
                 )
               : (
                   <Button
-                    className="!text-xs !py-1 !px-1.5 h-auto !gap-1"
+                    className="text-xs! py-1! px-1.5! h-auto gap-1!"
                     disabled={trimmedQuestion.length === 0}
                     size="sm"
                     variant="outline"

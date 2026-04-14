@@ -132,13 +132,15 @@ async function withRetry<T>(operation: () => Promise<T>, description: string): P
     }
     catch (error) {
       lastError = error
+      const errorMessage = error instanceof Error ? error.message : String(error)
 
       if (attempt === RETRY_ATTEMPTS) {
+        console.error(`   ❌ ${description} 最终失败（已重试 ${RETRY_ATTEMPTS} 次）: ${errorMessage}`)
         break
       }
 
       const delay = RETRY_BASE_DELAY_MS * attempt
-      console.warn(`   ⚠️  ${description} 失败（第 ${attempt}/${RETRY_ATTEMPTS} 次），${delay}ms 后重试...`)
+      console.warn(`   ⚠️  ${description} 失败（第 ${attempt}/${RETRY_ATTEMPTS} 次）: ${errorMessage}，${delay}ms 后重试...`)
       await sleep(delay)
     }
   }

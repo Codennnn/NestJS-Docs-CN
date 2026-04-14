@@ -7,7 +7,7 @@ import dynamic from 'next/dynamic'
 import { MessageSquarePlusIcon, PanelLeftIcon, XIcon } from 'lucide-react'
 
 import { Button } from '~/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip'
+import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip'
 import { useChatSessions } from '~/hooks/useChatSessions'
 import type { ChatSession } from '~/types/chat'
 
@@ -114,59 +114,63 @@ export function AnswerPanelWithHistory(props: AnswerPanelWithHistoryProps) {
             )}
           </div>
 
-          <div className="flex items-center gap-0.5 ml-auto shrink-0">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className="size-7"
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleToggleHistory}
+          <TooltipProvider closeDelay={0} delay={200}>
+            <div className="flex items-center gap-0.5 ml-auto shrink-0">
+              <Tooltip>
+                <TooltipTrigger
+                  render={(
+                    <Button
+                      className="size-7"
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={handleToggleHistory}
+                    />
+                  )}
                 >
                   <PanelLeftIcon className="size-[1em]" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                {
-                  showHistory
-                    ? '隐藏历史'
-                    : '显示历史'
-                }
-              </TooltipContent>
-            </Tooltip>
+                </TooltipTrigger>
+                <TooltipPopup>
+                  {showHistory ? '隐藏历史' : '显示历史'}
+                </TooltipPopup>
+              </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className="size-7"
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleNewChat}
+              <Tooltip>
+                <TooltipTrigger
+                  render={(
+                    <Button
+                      className="size-7"
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={handleNewChat}
+                    />
+                  )}
                 >
                   <MessageSquarePlusIcon className="size-[1em]" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                新建对话
-              </TooltipContent>
-            </Tooltip>
+                </TooltipTrigger>
+                <TooltipPopup>
+                  新建对话
+                </TooltipPopup>
+              </Tooltip>
 
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  className="size-7"
-                  size="icon"
-                  variant="ghost"
-                  onClick={handleClose}
+              <Tooltip>
+                <TooltipTrigger
+                  render={(
+                    <Button
+                      className="size-7"
+                      size="icon-sm"
+                      variant="ghost"
+                      onClick={handleClose}
+                    />
+                  )}
                 >
                   <XIcon className="size-[1em]" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                关闭
-              </TooltipContent>
-            </Tooltip>
-          </div>
+                </TooltipTrigger>
+                <TooltipPopup>
+                  关闭
+                </TooltipPopup>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </div>
 
         {/* 答案面板内容 */}

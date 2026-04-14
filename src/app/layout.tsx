@@ -5,7 +5,6 @@ import { Analytics } from '@vercel/analytics/react'
 
 import { StructuredData } from '~/components/StructuredData'
 import { ThemeProvider } from '~/components/ThemeProvider'
-import { Toaster } from '~/components/ui/sonner'
 import { SITE_CONFIG } from '~/constants/common'
 import { getPageTitle } from '~/utils/common'
 import { isProduction } from '~/utils/platform'
@@ -129,8 +128,6 @@ export default function RootLayout(props: React.PropsWithChildren) {
         >
           {props.children}
         </ThemeProvider>
-
-        <Toaster richColors position="top-center" />
 
         {/*
           Umami 网站分析脚本

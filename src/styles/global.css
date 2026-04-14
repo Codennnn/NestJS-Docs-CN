@@ -277,7 +277,7 @@
     );
 
     &::after {
-      @apply absolute bottom-0 inset-x-0 z-10 content-[''] h-12 @md:h-16 @xl:h-20;
+      @apply absolute bottom-0 inset-x-0 z-50 content-[''] h-12 @md:h-16 @xl:h-20;
 
       background: linear-gradient(180deg, transparent 0%, var(--background) 100%);
     }

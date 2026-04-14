@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '~/components/ui/dialog'
-import { KeyboardKey } from '~/components/ui/kbd'
+import { Kbd } from '~/components/ui/kbd'
 import { useSearchHistory } from '~/hooks/useSearchHistory'
 import type { SearchResult } from '~/types/doc'
 
@@ -141,14 +141,14 @@ export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <DialogHeader className="border-b border-border">
+      <DialogHeader className="border-b border-border p-0">
         <DialogTitle>
           <div className="relative flex items-center gap-3 px-3 h-12">
             <SearchIcon className="size-4 shrink-0" />
 
             <input
               ref={inputRef}
-              className="flex-1 h-full !outline-none font-normal text-sm !border-none shadow-none focus-visible:outline-none placeholder:text-muted-foreground"
+              className="flex-1 h-full outline-none! font-normal text-sm border-none! shadow-none focus-visible:outline-none placeholder:text-muted-foreground"
               placeholder="搜索 NestJS 文档..."
               type="text"
               value={searchTerm}
@@ -192,26 +192,26 @@ export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
       <div className="border-t border-border p-3 bg-muted/40">
         <div className="flex items-center justify-between gap-4 text-xs text-muted-foreground">
           <div className="flex items-center gap-1">
-            <KeyboardKey>
+            <Kbd>
               <ArrowUpIcon className="size-3" />
-            </KeyboardKey>
-            <KeyboardKey>
+            </Kbd>
+            <Kbd>
               <ArrowDownIcon className="size-3" />
-            </KeyboardKey>
+            </Kbd>
             <span>导航</span>
           </div>
 
           <div className="flex items-center gap-1">
-            <KeyboardKey>
+            <Kbd>
               <CornerDownLeftIcon className="size-3" />
-            </KeyboardKey>
+            </Kbd>
             <span>选择</span>
           </div>
 
           <div className="flex items-center gap-1 ml-auto">
-            <KeyboardKey>
+            <Kbd>
               <span>Esc</span>
-            </KeyboardKey>
+            </Kbd>
             <span>关闭</span>
           </div>
         </div>
