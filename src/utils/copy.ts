@@ -1,4 +1,4 @@
-import { toast } from 'sonner'
+import { toastManager } from '~/components/ui/toast'
 
 /**
  * 检查是否支持复制功能
@@ -64,7 +64,7 @@ export async function copyToClipboard(
 
     // 显示成功提示
     if (showToast) {
-      toast.success(successMessage)
+      toastManager.add({ title: successMessage, type: 'success' })
     }
 
     // 执行成功回调
@@ -77,7 +77,7 @@ export async function copyToClipboard(
 
     // 显示错误提示
     if (showToast) {
-      toast.error(errorMessage)
+      toastManager.add({ title: errorMessage, type: 'error' })
     }
 
     // 执行错误回调
