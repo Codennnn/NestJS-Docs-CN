@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Script from 'next/script'
 import NextTopLoader from 'nextjs-toploader'
+import { Analytics } from '@vercel/analytics/react'
 
 import { StructuredData } from '~/components/StructuredData'
 import { ThemeProvider } from '~/components/ThemeProvider'
@@ -147,6 +148,7 @@ export default function RootLayout(props: React.PropsWithChildren) {
             strategy="afterInteractive"
           />
         )}
+        <Analytics />
       </body>
     </html>
   )
