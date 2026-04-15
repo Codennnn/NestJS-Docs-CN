@@ -90,7 +90,7 @@ import { UsersService } from '../users/users.service'
 
 @Injectable()
 export class AuthService {
-  constructor(private usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) {}
 
   async signIn(username: string, pass: string): Promise<any> {
     const user = await this.usersService.findOne(username)
@@ -138,7 +138,7 @@ import { AuthService } from './auth.service'
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private readonly authService: AuthService) {}
 
   @HttpCode(HttpStatus.OK)
   @Post('login')
@@ -200,8 +200,6 @@ export class AuthService {
     const payload = { sub: user.userId, username: user.username }
 
     return {
-      // 💡 此处用于验证 JWT 载荷的密钥
-      // 即在 JwtModule 中配置的那个密钥
       access_token: await this.jwtService.signAsync(payload), // [!code hl]
     }
   }
@@ -297,9 +295,9 @@ export class AuthGuard implements CanActivate {
     }
 
     try {
-      // 💡 此处用于验证 JWT 载荷的密钥
-      // 即在 JwtModule 中配置的那个密钥
-      const payload = await this.jwtService.verifyAsync(token)
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: jwtConstants.secret,
+      })
 
       // 💡 将 JWT 载荷附加到请求对象上，便于后续在控制器中访问用户信息
       request.user = payload

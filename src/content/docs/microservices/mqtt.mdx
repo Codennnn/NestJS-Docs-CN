@@ -111,6 +111,24 @@ const app = await NestFactory.createMicroservice<MicroserviceOptions>(
 
 如果需要针对某个主题设置特定的 QoS，建议实现[自定义传输器](/microservices/custom-transport)。
 
+## 按模式设置 QoS
+
+你可以通过在模式装饰器的 `extras` 字段中提供 `qos` 来按模式覆盖 MQTT 订阅的 QoS 级别。若未指定，则使用全局 `subscribeOptions.qos` 作为默认值。
+
+```ts
+@EventPattern('critical-events', { extras: { qos: 2 } })
+handleCriticalEvent(@Payload() data: any) {
+  // This subscription uses QoS 2
+}
+
+@EventPattern('metrics', { extras: { qos: 0 } })
+handleMetrics(@Payload() data: any) {
+  // This subscription uses QoS 0
+}
+```
+
+> info **提示** 按模式设置 QoS 不会影响现有行为。当 `extras.qos` 未指定时，订阅将使用全局 `subscribeOptions.qos` 的值。
+
 ## 消息记录构建器（Record builders）
 
 要配置消息选项（如调整 QoS 等级、设置 Retain 或 DUP 标志，或为负载添加额外属性），可以使用 `MqttRecordBuilder` 类。例如，要将 `QoS` 设置为 `2`，可以使用 `setQoS` 方法，如下所示：

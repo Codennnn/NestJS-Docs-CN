@@ -371,6 +371,7 @@ export class KafkaMaxRetryExceptionFilter extends BaseExceptionFilter {
   private readonly logger = new Logger(KafkaMaxRetryExceptionFilter.name)
 
   constructor(
+    private readonly producer: Producer,
     private readonly maxRetries: number,
     // 超过最大重试次数时执行的可选自定义函数
     private readonly skipHandler?: (message: any) => Promise<void>
@@ -404,14 +405,55 @@ export class KafkaMaxRetryExceptionFilter extends BaseExceptionFilter {
       return // 停止异常的进一步传播
     }
 
-    // 如果重试次数未达到上限，继续执行默认的异常过滤器逻辑
-    super.catch(exception, host)
+    // 将消息重新发布到同一主题，并递增重试次数
+    try {
+      await this.republishWithRetry(kafkaContext, currentRetryCount + 1)
+      await this.commitOffset(kafkaContext)
+    } catch (republishError) {
+      this.logger.error(
+        'Failed to republish message for retry:',
+        republishError
+      )
+      // 回退到默认异常处理
+      super.catch(exception, host)
+    }
   }
 
   private getRetryCountFromContext(context: KafkaContext): number {
     const headers = context.getMessage().headers || {}
-    const retryHeader = headers['retryCount'] || headers['retry-count']
-    return retryHeader ? Number(retryHeader) : 0
+    const retryHeader = headers['retry-count']
+
+    if (!retryHeader) {
+      return 0
+    }
+
+    // Header 值为 Buffer 类型，需先转换为字符串
+    const value = Buffer.isBuffer(retryHeader)
+      ? retryHeader.toString()
+      : String(retryHeader)
+    return parseInt(value, 10) || 0
+  }
+
+  private async republishWithRetry(
+    context: KafkaContext,
+    retryCount: number
+  ): Promise<void> {
+    const topic = context.getTopic()
+    const message = context.getMessage()
+
+    await this.producer.send({
+      topic,
+      messages: [
+        {
+          key: message.key,
+          value: message.value,
+          headers: {
+            ...message.headers,
+            'retry-count': retryCount.toString(),
+          },
+        },
+      ],
+    })
   }
 
   private async commitOffset(context: KafkaContext): Promise<void> {
@@ -441,18 +483,53 @@ export class KafkaMaxRetryExceptionFilter extends BaseExceptionFilter {
 }
 ```
 
-该过滤器（Filter）允许你对 Kafka 事件的处理进行最多可配置次数的重试。一旦达到最大重试次数，会触发自定义的 `skipHandler`（如果有提供），并提交 offset，从而跳过有问题的事件，使后续事件能够继续被正常处理。
+该过滤器提供了一种机制，可在可配置的最大次数内对 Kafka 事件进行重试处理。当发生异常时，它会将消息重新发布到同一主题，并在消息头中递增 `retry-count` 的值，然后提交当前偏移量。一旦达到最大重试次数，将触发自定义的 `skipHandler`（如果已提供）并提交偏移量，从而跳过该问题事件，确保后续事件的处理不受阻断。
 
-你可以通过将该过滤器添加到事件处理器中来集成使用：
+你可以通过全局注册或在控制器层级注册来集成该过滤器。请注意，你需要提供一个 Kafka producer 实例：
 
-```ts
-@UseFilters(new KafkaMaxRetryExceptionFilter(5))
+```ts filename='kafka-retry.filter.ts'
+import { Inject, Injectable } from '@nestjs/common'
+import { Producer } from 'kafkajs'
+
+@Injectable()
+export class AppKafkaRetryFilter extends KafkaMaxRetryExceptionFilter {
+  constructor(@Inject('KAFKA_PRODUCER') producer: Producer) {
+    super(producer, 5) // 最大重试次数 = 5
+  }
+}
+```
+
+```ts filename='my-event.handler.ts'
+@Controller()
+@UseFilters(AppKafkaRetryFilter)
 export class MyEventHandler {
   @EventPattern('your-topic')
   async handleEvent(@Payload() data: any, @Ctx() context: KafkaContext) {
     // 你的事件处理逻辑...
   }
 }
+```
+
+请确保在你的模块中提供 Kafka producer：
+
+```ts filename='app.module.ts'
+import { Kafka } from 'kafkajs'
+
+@Module({
+  providers: [
+    AppKafkaRetryFilter,
+    {
+      provide: 'KAFKA_PRODUCER',
+      useFactory: async () => {
+        const kafka = new Kafka({ brokers: ['localhost:9092'] })
+        const producer = kafka.producer()
+        await producer.connect()
+        return producer
+      },
+    },
+  ],
+})
+export class AppModule {}
 ```
 
 ## 提交偏移量（Commit offsets）

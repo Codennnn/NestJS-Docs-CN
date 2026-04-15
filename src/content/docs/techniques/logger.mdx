@@ -35,6 +35,12 @@ const app = await NestFactory.create(AppModule, {
 
 可选的日志级别包括：`'log'`、`'fatal'`、`'error'`、`'warn'`、`'debug'`、`'verbose'`。你可以按需组合使用。
 
+<CalloutInfo>
+  NestJS 中的日志级别是**级联**的（继承的）。这意味着指定某个日志级别（如
+  `'log'`）时，会自动包含所有严重程度更高的级别（如 `'warn'`、`'error'` 和
+  `'fatal'`）。
+</CalloutInfo>
+
 ### 禁用彩色输出：
 
 ```ts

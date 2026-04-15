@@ -329,6 +329,18 @@ export class CatsController {
   选项，以确保类型检查的准确性。
 </CalloutInfo>
 
+`ZodValidationPipe` 也可以作用于特定参数，并与内置管道组合使用。例如，当我们希望对路由路径参数 `id` 单独使用 `ParseIntPipe` 进行整型转换，同时对请求体进行 Schema 校验时：
+
+```typescript
+@Post('/:id')
+async update(
+  @Param('id', ParseIntPipe) id: number,
+  @Body(new ZodValidationPipe(createCatSchema)) body: CreateCatDto
+): void {
+  this.catsService.update(id, body);
+}
+```
+
 ## 基于类装饰器的参数校验
 
 <CalloutInfo type="warning">

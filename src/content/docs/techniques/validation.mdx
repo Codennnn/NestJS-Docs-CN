@@ -33,30 +33,32 @@ export interface ValidationPipeOptions extends ValidatorOptions {
   transform?: boolean
   disableErrorMessages?: boolean
   exceptionFactory?: (errors: ValidationError[]) => any
+  errorFormat?: 'list' | 'grouped'
 }
 ```
 
 此外，`ValidationPipe` 还继承了 `class-validator` 中的所有配置选项（即 `ValidatorOptions` 接口），常用选项如下表所示：
 
-| 选项                      | 类型       | 说明                                                                   |
-| ------------------------- | ---------- | ---------------------------------------------------------------------- |
-| `enableDebugMessages`     | `boolean`  | 启用调试信息输出，验证失败时将在控制台打印额外的警告信息。             |
-| `skipUndefinedProperties` | `boolean`  | 忽略值为 `undefined` 的属性。                                          |
-| `skipNullProperties`      | `boolean`  | 忽略值为 `null` 的属性。                                               |
-| `skipMissingProperties`   | `boolean`  | 忽略值为 `null` 或 `undefined` 的属性。                                |
-| `whitelist`               | `boolean`  | 启用白名单机制，只保留使用了验证装饰器的属性，其余自动移除。           |
-| `forbidNonWhitelisted`    | `boolean`  | 在启用白名单的基础上，遇到未使用验证装饰器的属性将抛出异常，而非移除。 |
-| `forbidUnknownValues`     | `boolean`  | 若传入未知类型对象，将直接验证失败。                                   |
-| `disableErrorMessages`    | `boolean`  | 关闭详细错误信息的输出，返回异常时将不包含验证失败的具体信息。         |
-| `errorHttpStatusCode`     | `number`   | 指定验证失败时抛出的 HTTP 状态码，默认使用 `BadRequestException`。     |
-| `exceptionFactory`        | `Function` | 自定义异常工厂函数，可根据验证错误数组生成自定义异常对象。             |
-| `groups`                  | `string[]` | 启用验证分组，仅验证匹配当前组的装饰器。                               |
-| `always`                  | `boolean`  | 设置装饰器的 `always` 默认值，可用于强制启用某些验证逻辑。             |
-| `strictGroups`            | `boolean`  | 启用严格分组模式，仅当提供有效的 `groups` 时才验证包含分组的规则。     |
-| `dismissDefaultMessages`  | `boolean`  | 忽略默认的错误消息，未显式设置时，错误消息为 `undefined`。             |
-| `validationError.target`  | `boolean`  | 是否在 `ValidationError` 中包含目标对象。                              |
-| `validationError.value`   | `boolean`  | 是否在 `ValidationError` 中包含验证失败的原始值。                      |
-| `stopAtFirstError`        | `boolean`  | 启用后，遇到第一个验证失败项时将立即停止验证流程。默认为 `false`。     |
+| 选项                      | 类型                  | 说明                                                                                                                                                                   |
+| ------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enableDebugMessages`     | `boolean`             | 启用调试信息输出，验证失败时将在控制台打印额外的警告信息。                                                                                                             |
+| `skipUndefinedProperties` | `boolean`             | 忽略值为 `undefined` 的属性。                                                                                                                                          |
+| `skipNullProperties`      | `boolean`             | 忽略值为 `null` 的属性。                                                                                                                                               |
+| `skipMissingProperties`   | `boolean`             | 忽略值为 `null` 或 `undefined` 的属性。                                                                                                                                |
+| `whitelist`               | `boolean`             | 启用白名单机制，只保留使用了验证装饰器的属性，其余自动移除。                                                                                                           |
+| `forbidNonWhitelisted`    | `boolean`             | 在启用白名单的基础上，遇到未使用验证装饰器的属性将抛出异常，而非移除。                                                                                                 |
+| `forbidUnknownValues`     | `boolean`             | 若传入未知类型对象，将直接验证失败。                                                                                                                                   |
+| `disableErrorMessages`    | `boolean`             | 关闭详细错误信息的输出，返回异常时将不包含验证失败的具体信息。                                                                                                         |
+| `errorHttpStatusCode`     | `number`              | 指定验证失败时抛出的 HTTP 状态码，默认使用 `BadRequestException`。                                                                                                     |
+| `exceptionFactory`        | `Function`            | 自定义异常工厂函数，可根据验证错误数组生成自定义异常对象。                                                                                                             |
+| `errorFormat`             | `'list' \| 'grouped'` | 指定验证错误消息的格式。`'list'`（默认）以字符串数组返回错误信息；`'grouped'` 以属性路径为键、错误消息数组为值的对象返回，保留自定义验证消息原文，不拼接父级路径前缀。 |
+| `groups`                  | `string[]`            | 启用验证分组，仅验证匹配当前组的装饰器。                                                                                                                               |
+| `always`                  | `boolean`             | 设置装饰器的 `always` 默认值，可用于强制启用某些验证逻辑。                                                                                                             |
+| `strictGroups`            | `boolean`             | 启用严格分组模式，仅当提供有效的 `groups` 时才验证包含分组的规则。                                                                                                     |
+| `dismissDefaultMessages`  | `boolean`             | 忽略默认的错误消息，未显式设置时，错误消息为 `undefined`。                                                                                                             |
+| `validationError.target`  | `boolean`             | 是否在 `ValidationError` 中包含目标对象。                                                                                                                              |
+| `validationError.value`   | `boolean`             | 是否在 `ValidationError` 中包含验证失败的原始值。                                                                                                                      |
+| `stopAtFirstError`        | `boolean`             | 启用后，遇到第一个验证失败项时将立即停止验证流程。默认为 `false`。                                                                                                     |
 
 <CalloutInfo>
   如需了解更多 `class-validator`

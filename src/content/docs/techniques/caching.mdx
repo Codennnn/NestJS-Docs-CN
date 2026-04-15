@@ -259,7 +259,7 @@ import { CacheModule } from '@nestjs/cache-manager'
 import { AppController } from './app.controller'
 import { createKeyv } from '@keyv/redis'
 import { Keyv } from 'keyv'
-import { CacheableMemory } from 'cacheable'
+import { KeyvCacheableMemory } from 'cacheable'
 
 @Module({
   imports: [
@@ -267,7 +267,7 @@ import { CacheableMemory } from 'cacheable'
       useFactory: async () => ({
         stores: [
           new Keyv({
-            store: new CacheableMemory({ ttl: 60000, lruSize: 5000 }),
+            store: new KeyvCacheableMemory({ ttl: 60000, lruSize: 5000 }),
           }),
           createKeyv('redis://localhost:6379'),
         ],
