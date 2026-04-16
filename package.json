@@ -13,8 +13,8 @@
     "lint:es": "eslint \"**/*.{ts,tsx}\"",
     "lint:ts": "tsc",
     "format:docs": "prettier --write \"src/content/docs/**/*.mdx\"",
-    "orama:sync": "tsx scripts/sync-orama.ts",
-    "orama:dry-run": "DRY_RUN=true tsx scripts/sync-orama.ts"
+    "algolia:sync": "tsx scripts/sync-algolia.ts",
+    "algolia:dry-run": "DRY_RUN=true tsx scripts/sync-algolia.ts"
   },
   "dependencies": {
     "@base-ui/react": "1.4.0",
@@ -22,6 +22,7 @@
     "@next/mdx": "16.2.3",
     "@orama/core": "^1.2.19",
     "@vercel/analytics": "^2.0.1",
+    "algoliasearch": "^5.50.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "consola": "^3.4.2",

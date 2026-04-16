@@ -23,6 +23,8 @@ export interface DocMeta {
   section: string
   /** 路径分类（如 techniques、recipes） */
   category: string
+  /** 页面在导航中的全局顺序 */
+  pageOrder: number
 }
 
 /**
@@ -48,6 +50,7 @@ function traverseNavItems(
   items: NavMenuItem[],
   sectionTitle: string,
   map: Map<string, DocMeta>,
+  pageOrderRef: { value: number },
 ): void {
   for (const item of items) {
     if (item.url && !item.url.startsWith('http')) {
@@ -59,12 +62,13 @@ function traverseNavItems(
         titleEn: item.titleEn ?? '',
         section: sectionTitle,
         category: extractCategory(item.url),
+        pageOrder: pageOrderRef.value++,
       })
     }
 
     if (item.items) {
       // 子菜单继承父级的 section（大类）
-      traverseNavItems(item.items, sectionTitle, map)
+      traverseNavItems(item.items, sectionTitle, map, pageOrderRef)
     }
   }
 }
@@ -77,6 +81,7 @@ function traverseNavItems(
  */
 export function buildNavMap(navData: NavMenuItem[]): Map<string, DocMeta> {
   const map = new Map<string, DocMeta>()
+  const pageOrderRef = { value: 0 }
 
   for (const section of navData) {
     const sectionTitle = section.title ?? ''
@@ -89,12 +94,13 @@ export function buildNavMap(navData: NavMenuItem[]): Map<string, DocMeta> {
         titleEn: section.titleEn ?? '',
         section: sectionTitle,
         category: extractCategory(section.url),
+        pageOrder: pageOrderRef.value++,
       })
     }
 
     // 递归处理子菜单
     if (section.items) {
-      traverseNavItems(section.items, sectionTitle, map)
+      traverseNavItems(section.items, sectionTitle, map, pageOrderRef)
     }
   }
 
@@ -122,5 +128,6 @@ export function resolveDocMeta(
     titleEn: '',
     section: '未分类',
     category,
+    pageOrder: Number.MAX_SAFE_INTEGER,
   }
 }

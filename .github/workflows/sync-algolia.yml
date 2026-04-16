@@ -1,11 +1,11 @@
-name: Sync Orama Index
+name: Sync Algolia Index
 
 on:
   pull_request:
     paths:
       - 'src/content/docs/**/*.mdx'
       - 'src/lib/data/nav.ts'
-      - 'scripts/sync-orama.ts'
+      - 'scripts/sync-algolia.ts'
       - 'scripts/lib/**'
 
   push:
@@ -13,19 +13,19 @@ on:
     paths:
       - 'src/content/docs/**/*.mdx'
       - 'src/lib/data/nav.ts'
-      - 'scripts/sync-orama.ts'
+      - 'scripts/sync-algolia.ts'
       - 'scripts/lib/**'
 
   # 支持手动触发（用于首次全量同步或故障恢复）
   workflow_dispatch:
 
 concurrency:
-  group: sync-orama-${{ github.ref }}
+  group: sync-algolia-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   sync:
-    name: Validate and sync documents to Orama Cloud
+    name: Validate and sync documents to Algolia
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -45,13 +45,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate Orama sync payload
-        run: pnpm orama:dry-run
+      - name: Validate Algolia sync payload
+        run: pnpm algolia:dry-run
 
-      - name: Sync to Orama Cloud
+      - name: Sync to Algolia
         if: github.event_name != 'pull_request'
-        run: pnpm tsx scripts/sync-orama.ts
+        run: pnpm tsx scripts/sync-algolia.ts
         env:
-          ORAMA_PROJECT_ID: ${{ secrets.ORAMA_PROJECT_ID }}
-          ORAMA_PRIVATE_API_KEY: ${{ secrets.ORAMA_PRIVATE_API_KEY }}
-          ORAMA_DATASOURCE_ID: ${{ secrets.ORAMA_DATASOURCE_ID }}
+          NEXT_PUBLIC_ALGOLIA_APP_ID: ${{ secrets.ALGOLIA_APP_ID }}
+          ALGOLIA_ADMIN_API_KEY: ${{ secrets.ALGOLIA_ADMIN_API_KEY }}
+          NEXT_PUBLIC_ALGOLIA_INDEX_NAME: ${{ secrets.ALGOLIA_INDEX_NAME }}

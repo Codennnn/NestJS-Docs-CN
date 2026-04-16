@@ -22,10 +22,11 @@ function getOramaPublicConfig() {
 }
 
 /**
- * 获取 Orama Cloud 客户端单例
+ * 获取 Orama Cloud 客户端单例（仅用于 AI 问答功能）
  *
  * 使用单例模式避免重复创建客户端实例，
- * 所有搜索和 AI 会话共享同一个客户端连接。
+ * AI 问答会话共享同一个客户端连接。
+ * 注意：全文搜索已迁移至 Algolia，参见 src/lib/algolia.ts
  */
 export function getOramaClient(): OramaCloud {
   if (globalOrama.__oramaCloudClient__) {

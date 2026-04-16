@@ -1,30 +1,30 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 
 import { AlertCircleIcon, FileTextIcon, SearchIcon } from 'lucide-react'
 
 import { Skeleton } from '~/components/ui/skeleton'
-import { useOramaSearch } from '~/hooks/useOramaSearch'
-import {
-  calculateRelevanceScore,
-  highlightSearchTerm,
-} from '~/lib/search-utils'
-import type { SearchResult } from '~/types/doc'
+import { useAlgoliaSearch } from '~/hooks/useAlgoliaSearch'
+import type { AlgoliaSearchResult } from '~/types/doc'
 
 import { SearchResultItem } from './SearchResultItem'
 
 interface SearchResultsProps {
   searchTerm: string
+  queryTerm: string
   selectedIndex: number
   isComposing: boolean
 
   onSelectResult: (url: string) => void
-  onResultsChange: (results: SearchResult[]) => void
+  onResultsChange: (results: AlgoliaSearchResult[]) => void
   onSelectedIndexChange: (index: number) => void
 }
+
+const EMPTY_RESULTS: AlgoliaSearchResult[] = []
 
 export function SearchResults(props: SearchResultsProps) {
   const {
     searchTerm,
+    queryTerm,
     selectedIndex,
     isComposing,
     onSelectResult,
@@ -32,37 +32,24 @@ export function SearchResults(props: SearchResultsProps) {
     onSelectedIndexChange,
   } = props
 
-  // 在组合输入状态下不触发搜索，避免内容抖动
-  const effectiveSearchTerm = isComposing ? '' : searchTerm
+  const normalizedSearchTerm = searchTerm.trim()
+  const normalizedQueryTerm = queryTerm.trim()
 
-  // 使用自定义搜索 Hook
-  const { results, loading, error } = useOramaSearch({
-    term: effectiveSearchTerm,
+  // 使用 Algolia 搜索 Hook
+  const { results, loading, error } = useAlgoliaSearch({
+    term: queryTerm,
     limit: 20,
   })
-
-  // 处理搜索结果
-  const hits = useMemo<SearchResult[]>(() => {
-    if (!effectiveSearchTerm.trim()) {
-      return []
-    }
-
-    return (results?.hits ?? [])
-      .map((hit) => {
-        const enhancedHit = {
-          ...hit,
-          score: hit.score || calculateRelevanceScore(hit, effectiveSearchTerm),
-        } as SearchResult
-
-        return enhancedHit
-      })
-      .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-  }, [results, effectiveSearchTerm])
+  const hits = normalizedQueryTerm ? results : EMPTY_RESULTS
 
   useEffect(() => {
-    if (!effectiveSearchTerm.trim()) {
+    if (!normalizedSearchTerm) {
       onResultsChange([])
 
+      return
+    }
+
+    if (isComposing || loading) {
       return
     }
 
@@ -73,7 +60,7 @@ export function SearchResults(props: SearchResultsProps) {
     }
 
     onResultsChange(hits)
-  }, [effectiveSearchTerm, error, hits, onResultsChange])
+  }, [error, hits, isComposing, loading, normalizedSearchTerm, onResultsChange])
 
   useEffect(() => {
     if (selectedIndex >= hits.length) {
@@ -81,9 +68,7 @@ export function SearchResults(props: SearchResultsProps) {
     }
   }, [hits.length, onSelectedIndexChange, selectedIndex])
 
-  const highlightText = highlightSearchTerm
-
-  if (!searchTerm.trim()) {
+  if (!normalizedSearchTerm) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-12 text-center text-muted-foreground">
         <SearchIcon className="mb-4 size-12" />
@@ -93,7 +78,17 @@ export function SearchResults(props: SearchResultsProps) {
     )
   }
 
-  if (loading) {
+  if (isComposing && hits.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-12 text-center text-muted-foreground">
+        <SearchIcon className="mb-4 size-12" />
+        <div className="text-lg font-medium">正在输入中文关键词</div>
+        <div className="text-sm mt-1">完成输入后会自动开始搜索</div>
+      </div>
+    )
+  }
+
+  if (loading && hits.length === 0) {
     return (
       <div className="space-y-6 p-4">
         {Array.from({ length: 4 }).map((_, i) => (
@@ -123,7 +118,7 @@ export function SearchResults(props: SearchResultsProps) {
     )
   }
 
-  if (hits.length === 0) {
+  if (!loading && !isComposing && hits.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-12 text-center text-muted-foreground">
         <FileTextIcon className="mb-4 size-12" />
@@ -137,16 +132,20 @@ export function SearchResults(props: SearchResultsProps) {
 
   return (
     <div className="p-4 space-y-4">
+      {(isComposing || loading) && (
+        <div className="rounded-md border border-dashed border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          {isComposing ? '输入法组合中，完成输入后自动刷新结果' : '正在更新搜索结果...'}
+        </div>
+      )}
+
       {hits.map((hit, idx) => (
         <SearchResultItem
-          key={hit.id}
-          highlightText={highlightText}
+          key={hit.objectID}
           isSelected={idx === selectedIndex}
           result={hit}
-          searchTerm={effectiveSearchTerm}
           onClick={() => {
-            if (hit.document?.path) {
-              onSelectResult(hit.document.path)
+            if (hit.path) {
+              onSelectResult(hit.path)
             }
           }}
           onMouseEnter={() => { onSelectedIndexChange(idx) }}

@@ -1,21 +1,21 @@
 /* eslint-disable no-console */
 /**
- * Orama Cloud 索引同步脚本
+ * Algolia 索引同步脚本
  *
  * 读取所有 MDX 文档文件，按 H2 分段并清洗内容后，
- * 通过 @orama/core SDK 推送到 Orama Cloud 数据源。
+ * 通过 Algolia v5 SDK 推送到 Algolia 索引。
  *
  * 使用方式：
- *   pnpm tsx scripts/sync-orama.ts
+ *   pnpm tsx scripts/sync-algolia.ts
  *
  * 环境变量：
- *   ORAMA_PROJECT_ID       - Orama Cloud 项目 ID
- *   ORAMA_PRIVATE_API_KEY   - Orama Cloud 私有 API Key（写权限）
- *   ORAMA_DATASOURCE_ID     - 数据源 ID
- *   DRY_RUN                 - 设置为 'true' 时仅解析不推送（调试用）
+ *   NEXT_PUBLIC_ALGOLIA_APP_ID     - Algolia Application ID
+ *   ALGOLIA_ADMIN_API_KEY          - Algolia Admin API Key（写权限）
+ *   NEXT_PUBLIC_ALGOLIA_INDEX_NAME - 索引名称（可选，默认 nestjs_docs_cn）
+ *   DRY_RUN                       - 设置为 'true' 时仅解析不推送（调试用）
  */
 
-import { OramaCloud } from '@orama/core'
+import { algoliasearch } from 'algoliasearch'
 import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -24,7 +24,6 @@ import { buildNavMap, resolveDocMeta } from './lib/nav-resolver'
 
 // 导入导航数据（使用动态导入以避免路径别名问题）
 async function loadNavData() {
-  // 直接读取 nav.ts 的导出数据
   const navModule = await import('../src/lib/data/nav')
 
   return navModule.navMainData
@@ -33,10 +32,7 @@ async function loadNavData() {
 const DOCS_DIR = join(process.cwd(), 'src/content/docs')
 const DRY_RUN = process.env.DRY_RUN === 'true'
 const EXCLUDED_DOC_PATHS = new Set(['test'])
-const MAX_BATCH_DOCS = 100
-const MAX_BATCH_BYTES = 750_000
-const RETRY_ATTEMPTS = 5
-const RETRY_BASE_DELAY_MS = 2000
+const INDEX_NAME = process.env.NEXT_PUBLIC_ALGOLIA_INDEX_NAME ?? 'nestjs_docs_cn'
 
 /**
  * 递归收集所有 MDX 文件路径
@@ -67,35 +63,28 @@ async function collectMdxFiles(dirPath: string, basePath = ''): Promise<string[]
   return files
 }
 
-function toOramaDocuments(chunks: DocumentChunk[]): Record<string, unknown>[] {
-  return chunks.map((chunk) => ({ ...chunk }))
-}
-
-function batchDocuments(documents: Record<string, unknown>[]): Record<string, unknown>[][] {
-  const batches: Record<string, unknown>[][] = []
-  let currentBatch: Record<string, unknown>[] = []
-  let currentBatchBytes = 0
-
-  for (const document of documents) {
-    const documentBytes = Buffer.byteLength(JSON.stringify(document), 'utf8')
-    const exceedsBatchLimit = currentBatch.length >= MAX_BATCH_DOCS
-      || currentBatchBytes + documentBytes > MAX_BATCH_BYTES
-
-    if (currentBatch.length > 0 && exceedsBatchLimit) {
-      batches.push(currentBatch)
-      currentBatch = []
-      currentBatchBytes = 0
-    }
-
-    currentBatch.push(document)
-    currentBatchBytes += documentBytes
-  }
-
-  if (currentBatch.length > 0) {
-    batches.push(currentBatch)
-  }
-
-  return batches
+/**
+ * 将 DocumentChunk 转为 Algolia 记录（使用 objectID 作为唯一标识）
+ */
+function toAlgoliaRecords(chunks: DocumentChunk[]): Record<string, unknown>[] {
+  return chunks.map((chunk) => ({
+    objectID: chunk.id,
+    title: chunk.title,
+    titleEn: chunk.titleEn,
+    heading: chunk.heading,
+    anchor: chunk.anchor,
+    content: chunk.content,
+    path: chunk.path,
+    section: chunk.section,
+    category: chunk.category,
+    breadcrumbs: chunk.breadcrumbs,
+    isOverview: chunk.isOverview,
+    order: chunk.order,
+    pageOrder: chunk.pageOrder,
+    sectionKey: chunk.sectionKey,
+    chunkIndex: chunk.chunkIndex,
+    chunkCount: chunk.chunkCount,
+  }))
 }
 
 function validateUniqueChunkIds(chunks: DocumentChunk[]): void {
@@ -115,37 +104,6 @@ function validateUniqueChunkIds(chunks: DocumentChunk[]): void {
   if (duplicateIds.size > 0) {
     throw new Error(`检测到重复的文档 ID：\n${Array.from(duplicateIds).join('\n')}`)
   }
-}
-
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
-
-async function withRetry<T>(operation: () => Promise<T>, description: string): Promise<T> {
-  let lastError: unknown
-
-  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
-    try {
-      return await operation()
-    }
-    catch (error) {
-      lastError = error
-      const errorMessage = error instanceof Error ? error.message : String(error)
-
-      if (attempt === RETRY_ATTEMPTS) {
-        console.error(`   ❌ ${description} 最终失败（已重试 ${RETRY_ATTEMPTS} 次）: ${errorMessage}`)
-        break
-      }
-
-      const delay = RETRY_BASE_DELAY_MS * attempt
-      console.warn(`   ⚠️  ${description} 失败（第 ${attempt}/${RETRY_ATTEMPTS} 次）: ${errorMessage}，${delay}ms 后重试...`)
-      await sleep(delay)
-    }
-  }
-
-  throw lastError
 }
 
 /**
@@ -192,8 +150,6 @@ async function main() {
 
   validateUniqueChunkIds(allChunks)
 
-  console.log(`✅ 解析完成：${allChunks.length} 个文档分段\n`)
-
   // 统计信息
   const sections = new Map<string, number>()
 
@@ -209,7 +165,7 @@ async function main() {
 
   console.log()
 
-  // 4. 推送到 Orama Cloud
+  // 4. 推送到 Algolia
   if (DRY_RUN) {
     console.log('🏃 Dry Run 模式 - 跳过推送')
     console.log(`   将推送 ${allChunks.length} 个文档分段`)
@@ -227,46 +183,73 @@ async function main() {
     return
   }
 
-  const projectId = process.env.ORAMA_PROJECT_ID
-  const apiKey = process.env.ORAMA_PRIVATE_API_KEY
-  const datasourceId = process.env.ORAMA_DATASOURCE_ID
+  const appId = process.env.NEXT_PUBLIC_ALGOLIA_APP_ID
+  const adminApiKey = process.env.ALGOLIA_ADMIN_API_KEY
 
-  if (!projectId || !apiKey || !datasourceId) {
-    console.error('❌ 缺少环境变量：ORAMA_PROJECT_ID, ORAMA_PRIVATE_API_KEY, ORAMA_DATASOURCE_ID')
+  if (!appId || !adminApiKey) {
+    console.error('❌ 缺少环境变量：NEXT_PUBLIC_ALGOLIA_APP_ID, ALGOLIA_ADMIN_API_KEY')
     process.exit(1)
   }
 
-  console.log('🚀 推送到 Orama Cloud...')
+  console.log('🚀 推送到 Algolia...')
 
-  const orama = new OramaCloud({ projectId, apiKey })
-  const datasource = orama.dataSource(datasourceId)
-  const temporaryDatasource = await withRetry(
-    async () => datasource.createTemporaryIndex(),
-    '创建临时索引',
-  )
-  const batchedDocuments = batchDocuments(toOramaDocuments(allChunks))
+  const client = algoliasearch(appId, adminApiKey)
+  const records = toAlgoliaRecords(allChunks)
 
-  console.log(`   📦 已生成 ${batchedDocuments.length} 个上传批次`)
+  // 配置索引设置
+  console.log('⚙️  更新索引设置...')
+  const settingsResponse = await client.setSettings({
+    indexName: INDEX_NAME,
+    indexSettings: {
+      searchableAttributes: [
+        'unordered(title)',
+        'unordered(heading)',
+        'unordered(titleEn)',
+        'unordered(breadcrumbs)',
+        'unordered(content)',
+      ],
+      attributesForFaceting: [
+        'filterOnly(section)',
+        'filterOnly(category)',
+        'filterOnly(isOverview)',
+      ],
+      attributeForDistinct: 'sectionKey',
+      distinct: true,
+      attributesToRetrieve: [
+        'title', 'titleEn', 'heading', 'anchor',
+        'path', 'section', 'category',
+        'breadcrumbs', 'isOverview', 'order',
+        'pageOrder', 'sectionKey', 'chunkIndex',
+      ],
+      attributesToHighlight: ['title', 'titleEn', 'heading'],
+      attributesToSnippet: ['content:24'],
+      snippetEllipsisText: '…',
+      highlightPreTag: '<mark class="bg-theme/15 rounded-xs text-current">',
+      highlightPostTag: '</mark>',
+      queryLanguages: ['zh', 'en'],
+      indexLanguages: ['zh', 'en'],
+      customRanking: [
+        'asc(pageOrder)',
+        'desc(isOverview)',
+        'asc(order)',
+        'asc(chunkIndex)',
+      ],
+    },
+  })
+  await client.waitForTask({
+    indexName: INDEX_NAME,
+    taskID: settingsResponse.taskID,
+  })
 
-  for (let index = 0; index < batchedDocuments.length; index++) {
-    const batch = batchedDocuments[index]
-    const batchNum = index + 1
+  // 使用 replaceAllObjects 原子替换所有记录
+  console.log(`   📦 原子替换 ${records.length} 条记录...`)
+  await client.replaceAllObjects({
+    indexName: INDEX_NAME,
+    objects: records,
+    batchSize: 1000,
+  })
 
-    console.log(`   📦 推送批次 ${batchNum}/${batchedDocuments.length}（${batch.length} 个文档）...`)
-
-    await withRetry(
-      async () => temporaryDatasource.upsertDocuments(batch),
-      `批次 ${batchNum}/${batchedDocuments.length} 上传`,
-    )
-  }
-
-  console.log('🔄 切换临时索引...')
-  await withRetry(
-    async () => temporaryDatasource.swap(),
-    '切换临时索引',
-  )
-
-  console.log(`\n✅ 同步完成！共推送 ${allChunks.length} 个文档分段`)
+  console.log(`\n✅ 同步完成！共推送 ${allChunks.length} 个文档分段到索引 "${INDEX_NAME}"`)
 }
 
 main().catch((error: unknown) => {

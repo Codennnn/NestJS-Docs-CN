@@ -13,7 +13,7 @@ import {
 } from '~/components/ui/dialog'
 import { Kbd } from '~/components/ui/kbd'
 import { useSearchHistory } from '~/hooks/useSearchHistory'
-import type { SearchResult } from '~/types/doc'
+import type { AlgoliaSearchResult } from '~/types/doc'
 
 import { SearchResults } from './SearchResults'
 
@@ -23,9 +23,10 @@ interface SearchDialogContentProps {
 
 export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
   const [searchTerm, setSearchTerm] = useState('')
+  const [queryTerm, setQueryTerm] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
 
-  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<AlgoliaSearchResult[]>([])
   const resultCount = searchResults.length
 
   const [isComposing, setIsComposing] = useState(false)
@@ -52,7 +53,9 @@ export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
 
     // 只有在非输入法组合状态下才触发搜索
     if (!isComposing) {
+      setQueryTerm(value)
       setSelectedIndex(0)
+      setSearchResults([])
     }
   })
 
@@ -60,9 +63,14 @@ export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
     setIsComposing(true)
   })
 
-  const handleCompositionEnd = useEvent(() => {
+  const handleCompositionEnd = useEvent((ev: React.CompositionEvent<HTMLInputElement>) => {
+    const value = ev.currentTarget.value
+
     setIsComposing(false)
+    setSearchTerm(value)
+    setQueryTerm(value)
     setSelectedIndex(0)
+    setSearchResults([])
   })
 
   const handleSelectResult = useEvent((url: string) => {
@@ -99,7 +107,7 @@ export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
   })
 
   // 处理搜索结果变化，更新历史记录
-  const handleResultsChange = useEvent((results: SearchResult[]) => {
+  const handleResultsChange = useEvent((results: AlgoliaSearchResult[]) => {
     setSearchResults(results)
 
     // 当有搜索词且有结果时，添加到历史记录
@@ -109,6 +117,10 @@ export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
   })
 
   const handleKeyDown = useEvent((ev: React.KeyboardEvent<HTMLInputElement>) => {
+    if (isComposing || ev.nativeEvent.isComposing) {
+      return
+    }
+
     if (ev.key === 'Escape') {
       onClose()
     }
@@ -125,14 +137,15 @@ export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
       // 触发选中项的点击事件
       const selectedResult = searchResults[selectedIndex]
 
-      if (selectedResult.document?.path) {
-        handleSelectResult(selectedResult.document.path)
+      if (selectedResult.path) {
+        handleSelectResult(selectedResult.path)
       }
     }
   })
 
   const handleClearSearch = useEvent(() => {
     setSearchTerm('')
+    setQueryTerm('')
     setSelectedIndex(0)
     setSearchResults([])
 
@@ -181,6 +194,7 @@ export function SearchDialogContent({ onClose }: SearchDialogContentProps) {
       <ScrollGradientContainer>
         <SearchResults
           isComposing={isComposing}
+          queryTerm={queryTerm}
           searchTerm={searchTerm}
           selectedIndex={selectedIndex}
           onResultsChange={handleResultsChange}

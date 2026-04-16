@@ -25,6 +25,10 @@ export interface DocumentChunk {
   isOverview: boolean
   /** 章节在页面中的顺序 */
   order: number
+  /** 页面在导航中的全局顺序 */
+  pageOrder: number
+  /** 同一章节的唯一分组键，用于 Algolia distinct 去重 */
+  sectionKey: string
   /** 当前章节切块后的序号 */
   chunkIndex: number
   /** 当前章节切块后的总数 */
@@ -297,7 +301,7 @@ export function splitByH2(content: string): ParsedSection[] {
 export async function parseMdxFile(
   filePath: string,
   docPath: string,
-  meta: { title: string, titleEn: string, section: string, category: string },
+  meta: { title: string, titleEn: string, section: string, category: string, pageOrder: number },
 ): Promise<DocumentChunk[]> {
   const raw = await readFile(filePath, 'utf-8')
   const h1 = extractH1(raw)
@@ -327,6 +331,7 @@ export async function parseMdxFile(
     contentChunks.forEach((content, chunkIndex) => {
       const chunkSuffix = contentChunks.length > 1 ? `::${chunkIndex + 1}` : ''
       const chunkAnchor = anchor || '__overview'
+      const sectionKey = `${docPath}#${chunkAnchor}`
 
       chunks.push({
         id: `${docPath}#${chunkAnchor}${chunkSuffix}`,
@@ -341,6 +346,8 @@ export async function parseMdxFile(
         breadcrumbs,
         isOverview: section.isOverview,
         order: section.order,
+        pageOrder: meta.pageOrder,
+        sectionKey,
         chunkIndex,
         chunkCount: contentChunks.length,
       })

@@ -1,3 +1,5 @@
+import type { Hit } from 'algoliasearch/lite'
+
 export interface SearchDocument {
   /** URL 路径（如 /docs/techniques/caching#缓存） */
   path?: string
@@ -21,6 +23,10 @@ export interface SearchDocument {
   isOverview?: boolean
   /** 章节在页面中的顺序 */
   order?: number
+  /** 页面在导航中的顺序 */
+  pageOrder?: number
+  /** 同一章节的唯一分组键，用于 Algolia distinct 去重 */
+  sectionKey?: string
   /** 章节被切分后的分块序号 */
   chunkIndex?: number
   /** 章节被切分后的总块数 */
@@ -32,3 +38,6 @@ export interface SearchResult {
   document?: SearchDocument
   score?: number
 }
+
+/** Algolia 搜索命中结果 */
+export type AlgoliaSearchResult = Hit<SearchDocument>

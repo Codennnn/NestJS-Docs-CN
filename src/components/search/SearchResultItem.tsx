@@ -1,25 +1,32 @@
 import { useEffect, useMemo, useRef } from 'react'
 
+import type { HighlightResult, SnippetResult } from 'algoliasearch/lite'
 import { BookOpenIcon, FileTextIcon, MapPinIcon } from 'lucide-react'
 
 import { formatDocumentPath } from '~/lib/search-utils'
 import { cn } from '~/lib/utils'
-import type { SearchResult } from '~/types/doc'
+import type { AlgoliaSearchResult } from '~/types/doc'
 
 interface SearchResultItemProps {
-  result: SearchResult
+  result: AlgoliaSearchResult
   isSelected: boolean
-  searchTerm: string
 
-  highlightText: (text: string, searchTerm: string) => string
   onClick: () => void
   onMouseEnter: () => void
 }
 
-export function SearchResultItem(props: SearchResultItemProps) {
-  const { result, isSelected, searchTerm, highlightText, onClick, onMouseEnter } = props
+function getAlgoliaRichTextValue(
+  field: HighlightResult | SnippetResult | undefined,
+): string | undefined {
+  if (!field || Array.isArray(field) || !('value' in field)) {
+    return undefined
+  }
 
-  const { document } = result
+  return typeof field.value === 'string' ? field.value : undefined
+}
+
+export function SearchResultItem(props: SearchResultItemProps) {
+  const { result, isSelected, onClick, onMouseEnter } = props
 
   const ref = useRef<HTMLAnchorElement>(null)
 
@@ -32,37 +39,35 @@ export function SearchResultItem(props: SearchResultItemProps) {
     }
   }, [isSelected])
 
-  // 获取高亮显示的标题
-  const getHighlightedTitle = () => {
-    const title = document?.title ?? document?.heading ?? '无标题'
-
-    return highlightText(title, searchTerm)
-  }
-
-  // 获取高亮显示的内容
-  const getHighlightedContent = () => {
-    if (!document?.content) {
-      return ''
-    }
-
-    return highlightText(document.content, searchTerm)
-  }
+  // 使用 Algolia 原生高亮，回退到原始文本
+  const highlightedTitle = getAlgoliaRichTextValue(result._highlightResult?.title)
+    ?? result.title
+    ?? '无标题'
+  const highlightedTitleEn = getAlgoliaRichTextValue(result._highlightResult?.titleEn)
+    ?? result.titleEn
+    ?? ''
+  const highlightedHeading = getAlgoliaRichTextValue(result._highlightResult?.heading)
+    ?? result.heading
+    ?? ''
+  const highlightedContent = getAlgoliaRichTextValue(result._snippetResult?.content)
+  const fallbackContent = !highlightedContent && result.content
+    ? `${result.content.slice(0, 140)}${result.content.length > 140 ? '…' : ''}`
+    : ''
+  const showTitleEn = !!highlightedTitleEn && result.titleEn && result.titleEn !== result.title
+  const showHeading = !!highlightedHeading
+    && !!result.heading
+    && !result.isOverview
+    && result.heading !== result.title
 
   // 获取文档路径显示
   const documentPath = useMemo(() => {
-    if (document?.path) {
-      return formatDocumentPath(document.path)
+    if (result.path) {
+      return formatDocumentPath(result.path)
     }
-  }, [document])
+  }, [result.path])
 
   // 生成文档链接
-  const documentHref = useMemo(() => {
-    if (document?.path) {
-      return document.path
-    }
-
-    return '#'
-  }, [document])
+  const documentHref = result.path ?? '#'
 
   /**
    * 处理点击事件
@@ -102,27 +107,49 @@ export function SearchResultItem(props: SearchResultItemProps) {
       onMouseEnter={handleMouseEnter}
     >
       <div className="mt-0.5 shrink-0 text-muted-foreground">
-        {document?.section
+        {result.isOverview
           ? (
-              <FileTextIcon className="size-4" />
+              <BookOpenIcon className="size-4" />
             )
           : (
-              <BookOpenIcon className="size-4" />
+              <FileTextIcon className="size-4" />
             )}
       </div>
 
       <div className="min-w-0 flex-1 space-y-2">
-        <div
-          className="font-medium text-sm leading-5 truncate"
-          dangerouslySetInnerHTML={{ __html: getHighlightedTitle() }}
-        />
+        <div className="space-y-1">
+          <div
+            className="font-medium text-sm leading-5 truncate"
+            dangerouslySetInnerHTML={{ __html: highlightedTitle }}
+          />
+
+          {showTitleEn && (
+            <div
+              className="text-xs text-muted-foreground truncate"
+              dangerouslySetInnerHTML={{ __html: highlightedTitleEn }}
+            />
+          )}
+
+          {showHeading && (
+            <div
+              className="text-xs text-foreground/80 truncate"
+              dangerouslySetInnerHTML={{ __html: highlightedHeading }}
+            />
+          )}
+        </div>
 
         {/* 内容预览 */}
-        {!!document?.content && (
+        {!!highlightedContent && (
           <div
             className="text-muted-foreground text-xs leading-4 line-clamp-2"
-            dangerouslySetInnerHTML={{ __html: getHighlightedContent() }}
+            dangerouslySetInnerHTML={{ __html: highlightedContent }}
           />
+        )}
+
+        {!highlightedContent && !!fallbackContent && (
+          <div className="text-muted-foreground text-xs leading-4 line-clamp-2">
+            {fallbackContent}
+          </div>
         )}
 
         {/* 文档路径 */}
