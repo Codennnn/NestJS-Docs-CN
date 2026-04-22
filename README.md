@@ -93,4 +93,4 @@ pnpm format:docs              # 统一 MDX 文档格式
 
 ## License
 
-本项目采用 MIT 开源协议。
+本项目采用 MIT 开源协议，详细条款见根目录下的 [LICENSE](LICENSE) 文件。
