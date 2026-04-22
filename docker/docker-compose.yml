@@ -1,27 +1,41 @@
+name: ${COMPOSE_PROJECT_NAME:-nestjs-docs}
+
 services:
   web:
-    platform: linux/amd64
-    image: nestjs-docs-web:latest
+    image: nestjs-docs-web:${IMAGE_TAG:-latest}
+    container_name: ${WEB_CONTAINER_NAME:-nestjs-docs-web}
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      # NEXT_PUBLIC_* 为构建时变量，next build 会将其静态 inline 到客户端 bundle
+      # 任何变更都必须重新 build 镜像才能在浏览器中生效
+      args:
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3001}
+        NEXT_PUBLIC_ORAMA_PROJECT_ID: ${NEXT_PUBLIC_ORAMA_PROJECT_ID:-}
+        NEXT_PUBLIC_ORAMA_API_KEY: ${NEXT_PUBLIC_ORAMA_API_KEY:-}
+        NEXT_PUBLIC_ALGOLIA_APP_ID: ${NEXT_PUBLIC_ALGOLIA_APP_ID:-}
+        NEXT_PUBLIC_ALGOLIA_SEARCH_API_KEY: ${NEXT_PUBLIC_ALGOLIA_SEARCH_API_KEY:-}
+        NEXT_PUBLIC_ALGOLIA_INDEX_NAME: ${NEXT_PUBLIC_ALGOLIA_INDEX_NAME:-nestjs_docs_cn}
     ports:
-      - '3001:8080' # 宿主机:容器内部
-    # 运行时凭据通过 env_file 注入，不在此处硬编码
-    # 复制 .env.example 为 .env.production 并填写真实值后取消注释：
-    # env_file:
-    #   - ../.env.production
-    # 或通过 environment 字段逐项传入（值从 shell 环境变量继承，不写死）：
-    # environment:
-    #   - NODE_ENV
-    #   - NEXT_PUBLIC_SITE_URL
-    #   - NEXT_PUBLIC_ORAMA_PROJECT_ID
-    #   - NEXT_PUBLIC_ORAMA_API_KEY
-    #   - NEXT_PUBLIC_ALGOLIA_APP_ID
-    #   - NEXT_PUBLIC_ALGOLIA_SEARCH_API_KEY
-    #   - NEXT_PUBLIC_ALGOLIA_INDEX_NAME
+      - '${WEB_PORT:-3001}:8080'
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 8080
+      # 以下 NEXT_PUBLIC_* 仅供服务端 SSR 运行时读取
+      # 客户端 bundle 中的值已在构建时被固化，修改此处对浏览器端无效
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3001}
+      NEXT_PUBLIC_ORAMA_PROJECT_ID: ${NEXT_PUBLIC_ORAMA_PROJECT_ID:-}
+      NEXT_PUBLIC_ORAMA_API_KEY: ${NEXT_PUBLIC_ORAMA_API_KEY:-}
+      NEXT_PUBLIC_ALGOLIA_APP_ID: ${NEXT_PUBLIC_ALGOLIA_APP_ID:-}
+      NEXT_PUBLIC_ALGOLIA_SEARCH_API_KEY: ${NEXT_PUBLIC_ALGOLIA_SEARCH_API_KEY:-}
+      NEXT_PUBLIC_ALGOLIA_INDEX_NAME: ${NEXT_PUBLIC_ALGOLIA_INDEX_NAME:-nestjs_docs_cn}
+    healthcheck:
+      test: ['CMD-SHELL', 'wget --spider -q http://127.0.0.1:8080/ || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
+    mem_limit: 512m
+    cpus: 1.0
     restart: unless-stopped
-    # 如果后端也在 Docker 中运行，可以添加网络配置
-    # networks:
-    #   - app-network
-# 如果需要与其他服务（如数据库、后端API）连接，可以取消注释以下配置
-# networks:
-#   app-network:
-#     driver: bridge

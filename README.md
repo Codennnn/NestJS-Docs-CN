@@ -5,7 +5,7 @@
 <h1 align="center">NestJS 中文文档站</h1>
 
 <p align="center">
-  把 NestJS 官方文档，翻译成能在项目里直接用的中文。
+  让中文开发者轻松掌握 NestJS 框架的最佳学习资源。不用翻墙、不看生涩英文，也能轻松学会 NestJS。
 </p>
 
 <p align="center">

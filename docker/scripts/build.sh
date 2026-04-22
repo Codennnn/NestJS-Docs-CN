@@ -1,27 +1,33 @@
 #!/bin/bash
 
-set -e
+set -euo pipefail
 
-echo "🚀 构建 Next.js Web 应用..."
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+DOCKER_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+REPO_ROOT=$(CDPATH= cd -- "$DOCKER_DIR/.." && pwd)
+COMPOSE_FILE="$DOCKER_DIR/docker-compose.yml"
+ENV_FILE="${ENV_FILE:-$REPO_ROOT/.env.production}"
 
-# 切换到项目根目录
-cd "$(dirname "$0")/../../../.."
+echo "Building Docker image for the Next.js app..."
 
-# 检查是否在正确的目录
-if [ ! -f "package.json" ]; then
-    echo "❌ 错误：请在项目根目录（包含 package.json）运行此脚本"
-    exit 1
+if ! docker info >/dev/null 2>&1; then
+  echo "Docker is not running."
+  exit 1
 fi
 
-# 构建 Docker 镜像（环境变量已硬编码到 Dockerfile 中）
-echo "📦 构建 Docker 镜像..."
-echo "🔧 使用硬编码环境变量"
-docker build -t nestjs-docs-web:latest -f apps/web/docker/Dockerfile .
+cd "$REPO_ROOT"
 
-echo "✅ 构建完成！"
-echo ""
-echo "🎯 使用方法："
-echo "  直接运行: docker run -p 3001:8080 nestjs-docs-web:latest"
-echo "  使用 compose: cd apps/web/docker && docker-compose up"
-echo ""
-echo "🌐 访问地址: http://localhost:3001"
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+if [ -f "$ENV_FILE" ]; then
+  echo "Using env file: $ENV_FILE"
+  COMPOSE_ARGS+=(--env-file "$ENV_FILE")
+else
+  echo "[WARN] Env file not found at: $ENV_FILE"
+  echo "[WARN] 未在当前 shell 设置 NEXT_PUBLIC_* 时，构建产物会缺失搜索等客户端配置。"
+  echo "[WARN] 继续使用 compose 默认值与当前 shell 环境进行构建..."
+fi
+
+docker compose "${COMPOSE_ARGS[@]}" build web
+
+echo "Build completed."
+echo "Run with: docker compose ${COMPOSE_ARGS[*]} up -d web"

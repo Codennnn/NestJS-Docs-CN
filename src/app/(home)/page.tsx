@@ -273,7 +273,7 @@ export default function HomePage() {
 
           <div className="text-center relative z-10 fade-up">
             <h2 className="text-3xl md:text-4xl text-background font-bold mb-6">
-              准备好改变您开发后端应用的方式了吗？
+              准备好改变你开发后端应用的方式了吗？
             </h2>
             <p className="text-background/80 font-medium text-lg mb-10">
               立即查阅中文官方文档，体验前所未有的开发效能。
@@ -302,14 +302,16 @@ export default function HomePage() {
                   src="/logos/logo-32.png"
                   width={24}
                 />
-                <span className="text-lg font-bold tracking-tight">NestJS 中文社区</span>
+                <span className="text-lg font-bold tracking-tight">
+                  NestJS 中文社区
+                </span>
               </div>
               <p className="text-sm text-muted-foreground mb-6 max-w-xs leading-relaxed">
                 致力于为中文开发者提供最新、最准确的 NestJS 框架文档及周边生态资源，助力 Node.js 社区发展。
               </p>
               <div className="flex items-center gap-4">
-                <Link className="text-muted-foreground hover:text-theme transition-colors" href="#">
-                  <GithubIcon className="w-5 h-5" />
+                <Link className="text-muted-foreground hover:text-theme transition-colors" href="https://github.com/Codennnn/NestJS-Docs-CN">
+                  <GithubIcon className="size-5" />
                 </Link>
               </div>
             </div>
@@ -319,22 +321,40 @@ export default function HomePage() {
               <h4 className="font-bold mb-4">资源</h4>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li>
-                  <Link className="hover:text-theme transition-colors" href="/docs">
+                  <Link
+                    className="hover:text-theme transition-colors"
+                    href="/docs"
+                  >
                     官方文档
                   </Link>
                 </li>
                 <li>
-                  <Link className="hover:text-theme transition-colors" href="https://api-references-nestjs.netlify.app/api" rel="noopener noreferrer" target="_blank">
+                  <Link
+                    className="hover:text-theme transition-colors"
+                    href="https://api-references-nestjs.netlify.app/api"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
                     API 参考
                   </Link>
                 </li>
                 <li>
-                  <Link className="hover:text-theme transition-colors" href="https://search.bilibili.com/all?keyword=NestJS" rel="noopener noreferrer" target="_blank">
+                  <Link
+                    className="hover:text-theme transition-colors"
+                    href="https://search.bilibili.com/all?keyword=NestJS"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
                     视频教程
                   </Link>
                 </li>
                 <li>
-                  <Link className="hover:text-theme transition-colors" href="https://github.com/nestjs/nest/tree/master/sample" rel="noopener noreferrer" target="_blank">
+                  <Link
+                    className="hover:text-theme transition-colors"
+                    href="https://github.com/nestjs/nest/tree/master/sample"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
                     示例库
                   </Link>
                 </li>
@@ -346,32 +366,40 @@ export default function HomePage() {
               <h4 className="font-bold mb-4">生态</h4>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li>
-                  <Link className="hover:text-theme transition-colors" href="/docs/cli/overview">CLI</Link>
+                  <Link
+                    className="hover:text-theme transition-colors"
+                    href="/docs/cli/overview"
+                  >
+                    CLI
+                  </Link>
                 </li>
                 <li>
-                  <Link className="hover:text-theme transition-colors" href="/docs/devtools/overview">Devtools</Link>
+                  <Link
+                    className="hover:text-theme transition-colors"
+                    href="/docs/devtools/overview"
+                  >
+                    Devtools
+                  </Link>
                 </li>
                 <li>
-                  <Link className="hover:text-theme transition-colors" href="https://awesome-nestjs.com/" rel="noopener noreferrer" target="_blank">Awesome NestJS</Link>
+                  <Link
+                    className="hover:text-theme transition-colors"
+                    href="https://awesome-nestjs.com/"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    Awesome NestJS
+                  </Link>
                 </li>
                 <li>
-                  <Link className="hover:text-theme transition-colors" href="https://enterprise.nestjs.com/" rel="noopener noreferrer" target="_blank">企业咨询</Link>
-                </li>
-              </ul>
-            </div>
-
-            {/* 贡献链接 */}
-            <div>
-              <h4 className="font-bold mb-4">贡献</h4>
-              <ul className="space-y-3 text-sm text-muted-foreground">
-                <li>
-                  <Link className="hover:text-theme transition-colors" href="#">参与翻译</Link>
-                </li>
-                <li>
-                  <Link className="hover:text-theme transition-colors" href="#">报告文档问题</Link>
-                </li>
-                <li>
-                  <Link className="hover:text-theme transition-colors" href="#">加入社区组</Link>
+                  <Link
+                    className="hover:text-theme transition-colors"
+                    href="https://enterprise.nestjs.com/"
+                    rel="noopener noreferrer"
+                    target="_blank"
+                  >
+                    企业咨询
+                  </Link>
                 </li>
               </ul>
             </div>
