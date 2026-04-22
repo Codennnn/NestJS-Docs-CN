@@ -22,6 +22,7 @@ import {
 import { GithubIcon } from '~/components/icon/brand-icons'
 import { ThemeModeToggle } from '~/components/ThemeModeToggle'
 import { Button } from '~/components/ui/button'
+import { SITE_CONFIG } from '~/constants/common'
 import { cn } from '~/lib/utils'
 
 interface SectionItem {
@@ -130,7 +131,7 @@ export default function HomePage() {
                 alt="NestJS Logo"
                 className="rounded-lg"
                 height={32}
-                src="/logos/logo-128.png"
+                src={SITE_CONFIG.logoPath}
                 width={32}
               />
               <span className="font-bold text-lg">
@@ -299,7 +300,7 @@ export default function HomePage() {
                   alt="NestJS Logo"
                   className="rounded-md"
                   height={24}
-                  src="/logos/logo-32.png"
+                  src={SITE_CONFIG.logoPath}
                   width={24}
                 />
                 <span className="text-lg font-bold tracking-tight">

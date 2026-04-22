@@ -23,10 +23,15 @@ const PRELOAD_FONTS = [
 export const metadata: Metadata = {
   title: getPageTitle(),
   description: SITE_CONFIG.description,
-  icons: [
-    { url: SITE_CONFIG.logoPath, sizes: '32x32', rel: 'icon' },
-    { url: SITE_CONFIG.appTouchIconPath, sizes: '192x192', rel: 'apple-touch-icon' },
-  ],
+  icons: {
+    icon: [
+      { url: SITE_CONFIG.faviconPath, sizes: 'any', type: 'image/x-icon' },
+      { url: SITE_CONFIG.logo32Path, sizes: '32x32', type: 'image/png' },
+      { url: SITE_CONFIG.logoPath, sizes: '128x128', type: 'image/png' },
+    ],
+    shortcut: [{ url: SITE_CONFIG.faviconPath, type: 'image/x-icon' }],
+    apple: [{ url: SITE_CONFIG.appTouchIconPath, sizes: '180x180', type: 'image/png' }],
+  },
   keywords: ['NestJS', 'Node.js', 'TypeScript', '后端框架', '中文文档', 'JavaScript', 'Express', 'Fastify', '微服务', 'GraphQL', 'REST API'],
   authors: [{ name: SITE_CONFIG.author }],
   creator: SITE_CONFIG.author,
@@ -102,7 +107,11 @@ export default function RootLayout(props: React.PropsWithChildren) {
           />
         ))}
         {/* 提前与 CDN 建立连接，减少后续字体请求的 DNS+TLS 耗时 */}
-        <link crossOrigin="anonymous" href="https://cdn.leoku.dev" rel="preconnect" />
+        <link
+          crossOrigin="anonymous"
+          href="https://cdn.leoku.dev"
+          rel="preconnect"
+        />
       </head>
 
       <body className="h-full antialiased font-sans">

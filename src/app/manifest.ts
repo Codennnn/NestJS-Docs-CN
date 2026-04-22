@@ -19,12 +19,12 @@ export default function manifest(): MetadataRoute.Manifest {
         type: 'image/png',
       },
       {
-        src: '/logos/logo-192.png',
+        src: SITE_CONFIG.logo192Path,
         sizes: '192x192',
         type: 'image/png',
       },
       {
-        src: '/logos/logo-512.png',
+        src: SITE_CONFIG.logo512Path,
         sizes: '512x512',
         type: 'image/png',
       },

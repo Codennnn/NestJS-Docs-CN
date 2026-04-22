@@ -23,9 +23,13 @@ export const SITE_CONFIG = {
 
   // 相关链接
   englishDocsUrl: 'https://docs.nestjs.com',
+  faviconPath: '/favicon.ico',
+  logo32Path: '/logos/logo-32.png',
   logoPath: '/logos/logo-128.png',
+  logo192Path: '/logos/logo-192.png',
+  logo512Path: '/logos/logo-512.png',
   appTouchIconPath: '/logos/apple-touch-icon.png',
-  manifestPath: '/manifest.json',
+  manifestPath: '/manifest.webmanifest',
 
   og: {
     img: 'https://cdn.jsdelivr.net/gh/Codennnn/assets@main/i/og/nestjs-docs.png',
