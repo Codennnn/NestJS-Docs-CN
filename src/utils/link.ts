@@ -145,9 +145,9 @@ export function getDocLinkHref(href: string): string {
  *
  * @example
  * ```ts
- * getFullUrl() // 'https://nestjs.leoku.dev/'
- * getFullUrl('/docs') // 'https://nestjs.leoku.dev/docs'
- * getFullUrl('docs/overview') // 'https://nestjs.leoku.dev/docs/overview'
+ * getFullUrl() // 'http://localhost:8080/'
+ * getFullUrl('/docs') // 'http://localhost:8080/docs'
+ * getFullUrl('docs/overview') // 'http://localhost:8080/docs/overview'
  * ```
  */
 export function getFullUrl(path = '') {

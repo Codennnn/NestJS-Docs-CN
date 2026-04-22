@@ -1,9 +1,16 @@
 const SITE_DESCRIPTION = 'NestJS 中文文档，高质量的中文翻译版本，精准还原官方内容，助力中文开发者轻松掌握高效、可靠且可扩展的 Node.js 框架。'
+const DEFAULT_SITE_URL = 'http://localhost:8080'
+
+function getSiteUrl() {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim() || DEFAULT_SITE_URL
+
+  return siteUrl.replace(/\/+$/, '')
+}
 
 // 网站配置常量
 export const SITE_CONFIG = {
   // 基础 URL
-  baseUrl: 'https://nestjs.leoku.dev',
+  baseUrl: getSiteUrl(),
 
   // 网站信息
   name: 'NestJS 中文文档',

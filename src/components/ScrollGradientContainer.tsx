@@ -108,7 +108,7 @@ export const ScrollGradientContainer = forwardRef<
         <div
           className={cn(
             'absolute top-0 left-0 right-0 z-10 pointer-events-none',
-            'bg-gradient-to-b to-transparent',
+            'bg-linear-to-b to-transparent',
             gradientHeight,
             gradientFromColor,
             topGradientClass,
@@ -121,7 +121,7 @@ export const ScrollGradientContainer = forwardRef<
         <div
           className={cn(
             'absolute bottom-0 left-0 right-0 z-10 pointer-events-none',
-            'bg-gradient-to-t to-transparent',
+            'bg-linear-to-t to-transparent',
             gradientHeight,
             gradientFromColor,
             bottomGradientClass,
