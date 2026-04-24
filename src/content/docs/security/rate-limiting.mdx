@@ -288,26 +288,26 @@ export class GqlThrottlerGuard extends ThrottlerGuard {
 
 你可以在 `ThrottlerModule` 的配置数组中传入以下参数，每个对象代表一个限流器配置项：
 
-| 参数名             | 说明                                                                                                                            |
-| :----------------- | :------------------------------------------------------------------------------------------------------------------------------ |
-| `name`             | 限流器集合的名称，用于内部追踪。若未指定，默认为 `'default'`。                                                                  |
-| `ttl`              | 请求在存储中保留的时间（毫秒）。                                                                                                |
-| `limit`            | 在 `ttl` 时间范围内允许的最大请求次数。                                                                                         |
-| `blockDuration`    | 请求触发限流后的封禁时间（毫秒）。                                                                                              |
-| `ignoreUserAgents` | 一个包含正则表达式的数组，用于匹配并忽略指定的 `User-Agent`，不对其应用限流。                                                   |
-| `skipIf`           | 接收 `ExecutionContext` 并返回布尔值的函数，支持动态跳过限流逻辑。与 `@SkipThrottle()` 类似，但允许基于请求内容自定义跳过条件。 |
+| 参数名             | 说明                                                                                                                                                                       |
+| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`             | <div className='whitespace-pre-wrap'>限流器集合的名称，用于内部追踪。若未指定，默认为 `'default'`。</div>                                                                  |
+| `ttl`              | <div className='whitespace-pre-wrap'>请求在存储中保留的时间（毫秒）。</div>                                                                                                |
+| `limit`            | <div className='whitespace-pre-wrap'>在 `ttl` 时间范围内允许的最大请求次数。</div>                                                                                         |
+| `blockDuration`    | <div className='whitespace-pre-wrap'>请求触发限流后的封禁时间（毫秒）。</div>                                                                                              |
+| `ignoreUserAgents` | <div className='whitespace-pre-wrap'>一个包含正则表达式的数组，用于匹配并忽略指定的 `User-Agent`，不对其应用限流。</div>                                                   |
+| `skipIf`           | <div className='whitespace-pre-wrap'>接收 `ExecutionContext` 并返回布尔值的函数，支持动态跳过限流逻辑。与 `@SkipThrottle()` 类似，但允许基于请求内容自定义跳过条件。</div> |
 
 如果你希望全局配置某些选项（如统一存储方案），或集中定义多个限流器集合，可以通过 `throttlers` 选项进行配置，并使用以下参数：
 
-| 参数名             | 说明                                                                                                                                  |
-| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------ |
-| `storage`          | 自定义的限流存储服务实例，用于持久化请求状态。详见下方[存储方式](#存储方式)。                                                         |
-| `ignoreUserAgents` | 正则表达式数组，用于忽略特定 `User-Agent` 的限流逻辑。                                                                                |
-| `skipIf`           | 用于跳过限流逻辑的函数，接收 `ExecutionContext`，返回布尔值。支持灵活配置跳过条件。                                                   |
-| `throttlers`       | 定义多个限流器配置项的数组，结构与上表一致。                                                                                          |
-| `errorMessage`     | 自定义限流错误信息。可以是字符串，或函数形式，接收 `ExecutionContext` 与 `ThrottlerLimitDetail`，返回提示文本，用于覆盖默认错误信息。 |
-| `getTracker`       | 自定义追踪标识生成函数。接收 `Request` 对象，返回字符串，用于替代默认的 `getTracker` 实现。                                           |
-| `generateKey`      | 自定义存储键生成逻辑。接收 `ExecutionContext`、追踪标识字符串和限流器名称，返回最终存储使用的键，用于替换默认的 `generateKey` 方法。  |
+| 参数名             | 说明                                                                                                                                                                             |
+| :----------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `storage`          | <div className='whitespace-pre-wrap'>自定义的限流存储服务实例，用于持久化请求状态。详见下方[存储方式](#存储方式)。</div>                                                         |
+| `ignoreUserAgents` | <div className='whitespace-pre-wrap'>正则表达式数组，用于忽略特定 `User-Agent` 的限流逻辑。</div>                                                                                |
+| `skipIf`           | <div className='whitespace-pre-wrap'>用于跳过限流逻辑的函数，接收 `ExecutionContext`，返回布尔值。支持灵活配置跳过条件。</div>                                                   |
+| `throttlers`       | <div className='whitespace-pre-wrap'>定义多个限流器配置项的数组，结构与上表一致。</div>                                                                                          |
+| `errorMessage`     | <div className='whitespace-pre-wrap'>自定义限流错误信息。可以是字符串，或函数形式，接收 `ExecutionContext` 与 `ThrottlerLimitDetail`，返回提示文本，用于覆盖默认错误信息。</div> |
+| `getTracker`       | <div className='whitespace-pre-wrap'>自定义追踪标识生成函数。接收 `Request` 对象，返回字符串，用于替代默认的 `getTracker` 实现。</div>                                           |
+| `generateKey`      | <div className='whitespace-pre-wrap'>自定义存储键生成逻辑。接收 `ExecutionContext`、追踪标识字符串和限流器名称，返回最终存储使用的键，用于替换默认的 `generateKey` 方法。</div>  |
 
 ## 异步配置
 
